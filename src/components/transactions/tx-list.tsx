@@ -13,13 +13,10 @@ import { cn } from "@/lib/utils";
 
 export function describeTx(tx: Transaction, l: Lookups, items?: PurchaseItem[]) {
   const cat = tx.categoryId != null ? l.categories.get(tx.categoryId) : undefined;
-  const acc = l.accounts.get(tx.accountId);
   const store = tx.storeId != null ? l.stores.get(tx.storeId) : undefined;
   switch (tx.type) {
-    case "transfer": {
-      const to = tx.toAccountId != null ? l.accounts.get(tx.toAccountId) : undefined;
-      return { icon: "🔄", color: "#64748b", title: tx.note || "Перевод", subtitle: `${acc?.name ?? "?"} → ${to?.name ?? "?"}` };
-    }
+    case "adjustment":
+      return { icon: "⚖️", color: "#64748b", title: tx.note || "Корректировка баланса", subtitle: "Не учитывается в отчётах" };
     case "goal_deposit":
     case "goal_withdraw": {
       const g = tx.goalId != null ? l.goals.get(tx.goalId) : undefined;
@@ -28,7 +25,7 @@ export function describeTx(tx: Transaction, l: Lookups, items?: PurchaseItem[]) 
         icon: g?.icon ?? "🐷",
         color: g?.color,
         title: `${dep ? "В копилку" : "Из копилки"} «${g?.name ?? "?"}»`,
-        subtitle: [tx.note, dep ? `со счёта ${acc?.name ?? ""}` : `на счёт ${acc?.name ?? ""}`].filter(Boolean).join(" · "),
+        subtitle: tx.note || (dep ? "отложено" : "вернулось в свободные"),
       };
     }
     default: {
@@ -38,7 +35,7 @@ export function describeTx(tx: Transaction, l: Lookups, items?: PurchaseItem[]) 
         icon: items?.length ? "🧾" : (cat?.icon ?? "📦"),
         color: cat?.color,
         title: tx.note || (store && items?.length ? store.name : "") || itemsTitle || cat?.name || "Без категории",
-        subtitle: [items?.length ? itemsTitle || cat?.name : tx.note ? cat?.name : null, store && !(tx.note === "" && items?.length) ? store.name : null, acc?.name]
+        subtitle: [items?.length ? itemsTitle || cat?.name : (cat?.name ?? null), store && !(tx.note === "" && items?.length) ? store.name : null]
           .filter(Boolean)
           .join(" · "),
       };
@@ -49,7 +46,7 @@ export function describeTx(tx: Transaction, l: Lookups, items?: PurchaseItem[]) 
 export function TxRow({ tx, lookups, items, showDate }: { tx: Transaction; lookups: Lookups; items?: PurchaseItem[]; showDate?: boolean }) {
   const open = useTxEditor();
   const d = describeTx(tx, lookups, items);
-  const neutral = tx.type === "transfer" || tx.type === "goal_deposit" || tx.type === "goal_withdraw";
+  const neutral = tx.type === "goal_deposit" || tx.type === "goal_withdraw";
   return (
     <button type="button" onClick={() => open({ txId: tx.id })} className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-muted">
       <IconBubble icon={d.icon} color={d.color} />
@@ -66,6 +63,8 @@ export function TxRow({ tx, lookups, items, showDate }: { tx: Transaction; looku
       </span>
       {neutral ? (
         <span className={cn("tabular-nums whitespace-nowrap text-muted-foreground")}>{formatMoney(tx.amount)}</span>
+      ) : tx.type === "adjustment" ? (
+        <span className="tabular-nums whitespace-nowrap text-muted-foreground">{formatMoney(tx.amount, { sign: true })}</span>
       ) : (
         <Money value={tx.amount} kind={tx.type === "income" ? "income" : "expense"} className="font-semibold" />
       )}

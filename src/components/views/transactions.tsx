@@ -18,7 +18,7 @@ import { formatMoney, parseAmount } from "@/lib/money";
 import { downloadFile, exportCSV } from "@/lib/services/data";
 
 type PeriodPreset = "month" | "prev-month" | "30d" | "90d" | "year" | "all" | "custom";
-type TypeFilter = "all" | "expense" | "income" | "transfer" | "goal";
+type TypeFilter = "all" | "expense" | "income" | "goal" | "adjustment";
 
 const PAGE = 100;
 
@@ -50,13 +50,12 @@ export function TransactionsView() {
   const today = useToday();
   const openEditor = useTxEditor();
 
-  const hasDeepLink = params.has("category") || params.has("tag") || params.has("account");
+  const hasDeepLink = params.has("category") || params.has("tag");
   const [q, setQ] = useState(params.get("q") ?? "");
   const [preset, setPreset] = useState<PeriodPreset>((params.get("period") as PeriodPreset) ?? (hasDeepLink ? "all" : "month"));
   const [from, setFrom] = useState(params.get("from") ?? "");
   const [to, setTo] = useState(params.get("to") ?? "");
   const [type, setType] = useState<TypeFilter>((params.get("type") as TypeFilter) ?? "all");
-  const [account, setAccount] = useState(params.get("account") ?? "");
   const [category, setCategory] = useState(params.get("category") ?? "");
   const [tag, setTag] = useState(params.get("tag") ?? "");
   const [limit, setLimit] = useState(PAGE);
@@ -79,19 +78,17 @@ export function TransactionsView() {
     const query = normalizeKey(q);
     const qAmount = query ? parseAmount(query) : null;
     const catId = category ? Number(category) : null;
-    const accId = account ? Number(account) : null;
     const types: Record<TypeFilter, TransactionType[] | null> = {
       all: null,
       expense: ["expense"],
       income: ["income"],
-      transfer: ["transfer"],
       goal: ["goal_deposit", "goal_withdraw"],
+      adjustment: ["adjustment"],
     };
     const allowed = types[type];
     return txs.filter((t) => {
       if (range && (t.date < range.start || t.date > range.end)) return false;
       if (allowed && !allowed.includes(t.type)) return false;
-      if (accId != null && t.accountId !== accId && t.toAccountId !== accId) return false;
       if (tag && !t.tags.includes(tag)) return false;
       const its = itemsByTx.get(t.id);
       if (catId != null && t.categoryId !== catId && !its?.some((i) => i.categoryId === catId)) return false;
@@ -101,7 +98,6 @@ export function TransactionsView() {
           t.note,
           t.categoryId != null ? lookups.categories.get(t.categoryId)?.name : "",
           t.storeId != null ? lookups.stores.get(t.storeId)?.name : "",
-          lookups.accounts.get(t.accountId)?.name,
           t.goalId != null ? lookups.goals.get(t.goalId)?.name : "",
           ...t.tags,
           ...(its ?? []).map((i) => lookups.products.get(i.productId)?.name ?? ""),
@@ -113,7 +109,7 @@ export function TransactionsView() {
       }
       return true;
     });
-  }, [txs, preset, today, from, to, q, category, account, type, tag, itemsByTx, lookups]);
+  }, [txs, preset, today, from, to, q, category, type, tag, itemsByTx, lookups]);
 
   const totals = useMemo(() => {
     if (!filtered) return null;
@@ -129,11 +125,10 @@ export function TransactionsView() {
     return { expense, income };
   }, [filtered, category, items]);
 
-  const active = q || type !== "all" || account || category || tag || preset !== "month";
+  const active = q || type !== "all" || category || tag || preset !== "month";
   const reset = () => {
     setQ("");
     setType("all");
-    setAccount("");
     setCategory("");
     setTag("");
     setPreset("month");
@@ -164,7 +159,7 @@ export function TransactionsView() {
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск: заметка, продукт, магазин, сумма…" className="pl-9" aria-label="Поиск" />
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <NativeSelect aria-label="Период" value={preset} onChange={(e) => setPreset(e.target.value as PeriodPreset)}>
               <option value="month">Этот месяц</option>
               <option value="prev-month">Прошлый месяц</option>
@@ -178,16 +173,8 @@ export function TransactionsView() {
               <option value="all">Все типы</option>
               <option value="expense">Расходы</option>
               <option value="income">Приходы</option>
-              <option value="transfer">Переводы</option>
               <option value="goal">Копилки</option>
-            </NativeSelect>
-            <NativeSelect aria-label="Счёт" value={account} onChange={(e) => setAccount(e.target.value)}>
-              <option value="">Все счета</option>
-              {[...lookups.accounts.values()].map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.icon} {a.name}
-                </option>
-              ))}
+              <option value="adjustment">Корректировки</option>
             </NativeSelect>
             <NativeSelect aria-label="Категория" value={category} onChange={(e) => setCategory(e.target.value)}>
               <option value="">Все категории</option>
@@ -198,7 +185,7 @@ export function TransactionsView() {
                 </option>
               ))}
             </NativeSelect>
-            <NativeSelect aria-label="Тег" value={tag} onChange={(e) => setTag(e.target.value)} className="col-span-2 sm:col-span-1">
+            <NativeSelect aria-label="Тег" value={tag} onChange={(e) => setTag(e.target.value)}>
               <option value="">Все теги</option>
               {allTags.map((t) => (
                 <option key={t} value={t}>

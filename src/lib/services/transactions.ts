@@ -8,8 +8,6 @@ export interface TxInput {
   type: TransactionType;
   amount: number;
   date: ISODate;
-  accountId: number;
-  toAccountId?: number;
   categoryId?: number;
   goalId?: number;
   storeId?: number;
@@ -29,7 +27,6 @@ export interface ReceiptItemInput {
 
 export interface ReceiptInput {
   date: ISODate;
-  accountId: number;
   storeName?: string;
   note?: string;
   tags?: string[];
@@ -52,8 +49,6 @@ function build(input: TxInput): Omit<Transaction, "id"> {
     type: input.type,
     amount: input.amount,
     date: input.date,
-    accountId: input.accountId,
-    toAccountId: input.toAccountId,
     categoryId: input.categoryId,
     goalId: input.goalId,
     storeId: input.storeId,
@@ -66,10 +61,8 @@ function build(input: TxInput): Omit<Transaction, "id"> {
 }
 
 function validate(input: TxInput) {
-  if (!(input.amount > 0)) throw new Error("Сумма должна быть больше нуля");
-  if (input.type === "transfer" && (input.toAccountId == null || input.toAccountId === input.accountId)) {
-    throw new Error("Выбери другой счёт для перевода");
-  }
+  if (!Number.isInteger(input.amount)) throw new Error("Сумма должна быть в тиынах");
+  if (input.type === "adjustment" ? input.amount === 0 : !(input.amount > 0)) throw new Error("Сумма должна быть больше нуля");
   if ((input.type === "goal_deposit" || input.type === "goal_withdraw") && input.goalId == null) {
     throw new Error("Не выбрана копилка");
   }
@@ -91,7 +84,7 @@ export async function addTransaction(input: TxInput, opts: { skipAuto?: boolean 
       deposits = autoDeposits(input.amount, await db.goals.toArray());
       for (const d of deposits) {
         await db.transactions.add({
-          ...build({ type: "goal_deposit", amount: d.amount, date: input.date, accountId: input.accountId, goalId: d.goalId, note: "Автоотчисление" }),
+          ...build({ type: "goal_deposit", amount: d.amount, date: input.date, goalId: d.goalId, note: "Автоотчисление" }),
           parentId: id,
         });
       }
@@ -107,9 +100,9 @@ export async function updateTransaction(id: number, input: TxInput): Promise<voi
     if (!old) throw new Error("Операция не найдена");
     const next = build(input);
     await db.transactions.put({ ...next, id, createdAt: old.createdAt, parentId: old.parentId });
-    // автоотчисления следуют за датой и счётом прихода
+    // автоотчисления следуют за датой прихода
     if (old.type === "income") {
-      await db.transactions.where("parentId").equals(id).modify({ date: input.date, accountId: input.accountId });
+      await db.transactions.where("parentId").equals(id).modify({ date: input.date });
     }
   });
 }
@@ -122,7 +115,7 @@ export async function addReceipt(input: ReceiptInput): Promise<number> {
     const storeId = input.storeName ? await getOrCreateStore(input.storeName) : undefined;
     const main = mostExpensiveCategory(input.items);
     const txId = await db.transactions.add(
-      build({ type: "expense", amount: total, date: input.date, accountId: input.accountId, categoryId: main, storeId, note: input.note, tags: input.tags }),
+      build({ type: "expense", amount: total, date: input.date, categoryId: main, storeId, note: input.note, tags: input.tags }),
     );
     await writeItems(txId, input, storeId);
     return txId;
@@ -137,7 +130,7 @@ export async function updateReceipt(txId: number, input: ReceiptInput): Promise<
     if (!old) throw new Error("Операция не найдена");
     const storeId = input.storeName ? await getOrCreateStore(input.storeName) : undefined;
     await db.transactions.put({
-      ...build({ type: "expense", amount: total, date: input.date, accountId: input.accountId, categoryId: mostExpensiveCategory(input.items), storeId, note: input.note, tags: input.tags }),
+      ...build({ type: "expense", amount: total, date: input.date, categoryId: mostExpensiveCategory(input.items), storeId, note: input.note, tags: input.tags }),
       id: txId,
       createdAt: old.createdAt,
     });
@@ -187,4 +180,14 @@ export async function restoreSnapshot(s: TxSnapshot): Promise<void> {
     await db.transactions.bulkPut(s.transactions);
     await db.purchaseItems.bulkPut(s.items);
   });
+}
+
+/**
+ * Сверка баланса: пользователь говорит, сколько свободных денег у него на самом деле,
+ * мы записываем корректировку на разницу. Возвращает разницу (0 — всё сходится).
+ */
+export async function reconcileBalance(actualFree: number, currentFree: number, date: ISODate, note = "Сверка баланса"): Promise<number> {
+  const diff = actualFree - currentFree;
+  if (diff !== 0) await addTransaction({ type: "adjustment", amount: diff, date, note });
+  return diff;
 }

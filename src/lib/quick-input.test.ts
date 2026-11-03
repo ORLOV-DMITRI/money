@@ -4,7 +4,6 @@ import { parseQuickInput } from "./quick-input";
 const ctx = {
   today: "2026-11-03",
   stores: [{ id: 1, name: "Magnum" }, { id: 2, name: "Зелёный базар" }],
-  accounts: [{ id: 10, name: "Kaspi Gold" }, { id: 11, name: "Наличные" }],
 };
 
 describe("parseQuickInput", () => {
@@ -37,8 +36,8 @@ describe("parseQuickInput", () => {
     expect(parseQuickInput("подарок 5000 25.12", ctx).date).toBe("2025-12-25");
     expect(parseQuickInput("подарок 5000 01.11", ctx).date).toBe("2026-11-01");
   });
-  it("счёт по первому слову названия", () => {
-    expect(parseQuickInput("бензин 15000 kaspi", ctx)).toMatchObject({ accountId: 10, description: "бензин" });
+  it("магазин по первому слову длинного названия", () => {
+    expect(parseQuickInput("бананы 900 зелёный", ctx)).toMatchObject({ storeId: 2, description: "бананы" });
   });
   it("без суммы", () => {
     expect(parseQuickInput("просто текст", ctx).amount).toBeNull();

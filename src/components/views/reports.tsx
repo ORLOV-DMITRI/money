@@ -240,8 +240,12 @@ function SummaryTile({ label, value, prev, badWhenUp, signed }: { label: string;
         {formatMoney(value, { sign: signed })}
       </p>
       <p className="mt-0.5 text-xs text-muted-foreground">
-        {ch == null || value === prev ? (
+        {value === prev ? (
           "как в прошлом периоде"
+        ) : prev === 0 && !signed ? (
+          "в прошлом периоде не было"
+        ) : ch == null ? (
+          "к прошлому периоду: —"
         ) : (
           <>
             <span className={bad ? "text-destructive" : "text-income"}>{up ? "▲" : "▼"} {signed ? formatMoney(Math.abs(value - prev)) : formatPercent(Math.abs(ch))}</span> к прошлому

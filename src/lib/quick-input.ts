@@ -13,13 +13,11 @@ export interface QuickParse {
   tags: string[];
   description: string;
   storeId?: number;
-  accountId?: number;
 }
 
 export interface QuickContext {
   today: ISODate;
   stores?: { id?: number; name: string }[];
-  accounts?: { id?: number; name: string }[];
 }
 
 const DATE_WORDS: Record<string, number> = { сегодня: 0, вчера: -1, позавчера: -2 };
@@ -42,7 +40,7 @@ function parseDateToken(tok: string, today: ISODate): ISODate | null {
   return toISODate(d);
 }
 
-/** Ищем самое длинное имя (магазина/счёта), которое целиком встречается среди слов строки */
+/** Ищем самое длинное имя магазина, которое целиком встречается среди слов строки */
 function matchName<T extends { id?: number; name: string }>(words: string[], list: T[]): { item: T; used: Set<number> } | null {
   const sorted = [...list].sort((a, b) => b.name.length - a.name.length);
   for (const item of sorted) {
@@ -52,7 +50,7 @@ function matchName<T extends { id?: number; name: string }>(words: string[], lis
         return { item, used: new Set(nameToks.map((_, j) => i + j)) };
       }
     }
-    // «kaspi» → «Kaspi Gold»: первое слово имени, если оно достаточно длинное
+    // «galmart» → «Galmart Есиль»: первое слово имени, если оно достаточно длинное
     if (nameToks.length > 1 && nameToks[0].length >= 4) {
       const i = words.findIndex((w) => normalizeKey(w) === nameToks[0]);
       if (i >= 0) return { item, used: new Set([i]) };
@@ -126,14 +124,6 @@ export function parseQuickInput(input: string, ctx: QuickContext): QuickParse {
     const m = matchName(ws.map((w) => w ?? "\u0000"), ctx.stores);
     if (m) {
       res.storeId = m.item.id;
-      m.used.forEach((i) => used.add(i));
-    }
-  }
-  if (ctx.accounts?.length) {
-    const ws = free();
-    const m = matchName(ws.map((w) => w ?? "\u0000"), ctx.accounts);
-    if (m) {
-      res.accountId = m.item.id;
       m.used.forEach((i) => used.add(i));
     }
   }

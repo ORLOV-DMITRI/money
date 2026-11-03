@@ -164,13 +164,16 @@ export function buildInsights(input: InsightInput): Insight[] {
   // 6. Самый дорогой день недели (последние 90 дней)
   const last90 = { type: "custom" as const, start: addDaysISO(today, -89), end: today };
   const wd = weekdayAverages(txs, last90);
-  const avg = wd.reduce((s, v) => s + v, 0) / 7;
+  const avg = Math.round(wd.reduce((s, v) => s + v, 0) / 7 / 100) * 100;
   const maxIdx = wd.indexOf(Math.max(...wd));
-  if (avg > 0 && wd[maxIdx] > avg * 1.4) {
+  // нужна история хотя бы в 4 недели, иначе «закономерность» — это один случайный день
+  const firstExpense = txs.reduce<string | null>((m, t) => (t.type === "expense" && (m == null || t.date < m) ? t.date : m), null);
+  const enoughHistory = firstExpense != null && firstExpense <= addDaysISO(today, -27);
+  if (enoughHistory && avg > 0 && wd[maxIdx] > avg * 1.4) {
     out.push({
       id: "weekday",
       icon: "📅",
-      text: `Самый дорогой день недели — ${WEEKDAYS[maxIdx]}: в среднем ${formatMoney(wd[maxIdx])} против ${formatMoney(Math.round(avg))} в обычный день`,
+      text: `Самый дорогой день недели — ${WEEKDAYS[maxIdx]}: в среднем ${formatMoney(wd[maxIdx])} против ${formatMoney(avg)} в обычный день`,
       tone: "neutral",
       href: "/reports/",
       weight: 30,

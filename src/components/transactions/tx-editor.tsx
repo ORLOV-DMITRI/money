@@ -25,17 +25,17 @@ import {
   updateReceipt,
   updateTransaction,
 } from "@/lib/services/transactions";
-import { useAccounts, useBalances, useCategories, useGoals, useProducts, useStores, useTransactions } from "@/hooks/use-data";
+import { useBalances, useCategories, useGoals, useProducts, useStores, useTransactions } from "@/hooks/use-data";
 import { cn } from "@/lib/utils";
 
-export type EditorMode = "expense" | "income" | "transfer" | "receipt" | "goal";
+export type EditorMode = "expense" | "income" | "receipt" | "goal" | "adjustment";
 
 export interface EditorRequest {
   mode?: EditorMode;
   txId?: number;
   goalId?: number;
   goalDirection?: "deposit" | "withdraw";
-  preset?: Partial<Pick<Transaction, "amount" | "categoryId" | "accountId" | "note" | "date">>;
+  preset?: Partial<Pick<Transaction, "amount" | "categoryId" | "note" | "date">>;
 }
 
 const EditorContext = React.createContext<(r?: EditorRequest) => void>(() => {});
@@ -63,10 +63,9 @@ export function TxEditorProvider({ children }: { children: React.ReactNode }) {
 
 /* ------------------------------------------------------------------ */
 
-const MODE_TABS: { value: Exclude<EditorMode, "goal">; label: string }[] = [
+const MODE_TABS: { value: Exclude<EditorMode, "goal" | "adjustment">; label: string }[] = [
   { value: "expense", label: "Расход" },
   { value: "income", label: "Приход" },
-  { value: "transfer", label: "Перевод" },
   { value: "receipt", label: "Чек" },
 ];
 
@@ -105,20 +104,20 @@ function EditorDialog({ req, onDone }: { req: EditorRequest; onDone: () => void 
   const titles: Record<EditorMode, string> = {
     expense: "Расход",
     income: "Приход",
-    transfer: "Перевод",
+    adjustment: "Корректировка",
     receipt: "Чек",
     goal: "Копилка",
   };
 
   return (
     <DialogContent title={editing ? `Изменить: ${titles[mode].toLowerCase()}` : "Новая операция"} size={mode === "receipt" ? "lg" : "md"}>
-      {!editing && mode !== "goal" && <Segmented className="mb-4" value={mode as Exclude<EditorMode, "goal">} onChange={setMode} options={MODE_TABS} />}
+      {!editing && mode !== "goal" && mode !== "adjustment" && <Segmented className="mb-4" value={mode as Exclude<EditorMode, "goal" | "adjustment">} onChange={setMode} options={MODE_TABS} />}
       {!loaded ? (
         <div className="py-10 text-center text-sm text-muted-foreground">Загрузка…</div>
       ) : (
         <>
           {(mode === "expense" || mode === "income") && <SimpleForm key={mode} kind={mode} tx={loaded.tx} req={req} onDone={onDone} />}
-          {mode === "transfer" && <TransferForm tx={loaded.tx} onDone={onDone} />}
+          {mode === "adjustment" && loaded.tx && <AdjustmentForm tx={loaded.tx} onDone={onDone} />}
           {mode === "receipt" && <ReceiptForm tx={loaded.tx} onDone={onDone} />}
           {mode === "goal" && <GoalForm tx={loaded.tx} req={req} onDone={onDone} />}
           {editing && (
@@ -133,32 +132,6 @@ function EditorDialog({ req, onDone }: { req: EditorRequest; onDone: () => void 
 }
 
 /* ------------------------------------------------------------------ */
-
-function useDefaultAccount(type: Transaction["type"], txs: Transaction[] | undefined, accounts: { id: number; archived: boolean }[] | undefined) {
-  return React.useMemo(() => {
-    const active = (accounts ?? []).filter((a) => !a.archived);
-    const last = txs?.find((t) => t.type === type && active.some((a) => a.id === t.accountId));
-    return last?.accountId ?? active[0]?.id;
-  }, [type, txs, accounts]);
-}
-
-function AccountSelect({ value, onChange, label = "Счёт", exclude }: { value: number | undefined; onChange: (id: number) => void; label?: string; exclude?: number }) {
-  const accounts = useAccounts();
-  const balances = useBalances();
-  return (
-    <Field label={label}>
-      <NativeSelect value={value ?? ""} onChange={(e) => onChange(Number(e.target.value))}>
-        {(accounts ?? [])
-          .filter((a) => (!a.archived || a.id === value) && a.id !== exclude)
-          .map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.icon} {a.name} · {formatMoney(balances?.accounts.get(a.id) ?? 0)}
-            </option>
-          ))}
-      </NativeSelect>
-    </Field>
-  );
-}
 
 function TagsInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
@@ -194,22 +167,17 @@ async function warnBudget(categoryId: number | undefined, amount: number, date: 
 
 function SimpleForm({ kind, tx, req, onDone }: { kind: "expense" | "income"; tx?: Transaction; req: EditorRequest; onDone: () => void }) {
   const categories = useCategories() ?? [];
-  const accounts = useAccounts();
   const txs = useTransactions();
   const goals = useGoals();
-  const defAccount = useDefaultAccount(kind, txs, accounts);
   const p = req.preset ?? {};
 
   const [amount, setAmount] = React.useState<number | null>(tx?.amount ?? p.amount ?? null);
   const [categoryId, setCategoryId] = React.useState<number | undefined>(tx?.categoryId ?? p.categoryId);
   const [categoryTouched, setCategoryTouched] = React.useState(tx != null || p.categoryId != null);
-  const [accountId, setAccountId] = React.useState<number | undefined>(tx?.accountId ?? p.accountId);
   const [date, setDate] = React.useState(tx?.date ?? p.date ?? todayISO());
   const [note, setNote] = React.useState(tx?.note ?? p.note ?? "");
   const [tags, setTags] = React.useState(tx?.tags.join(", ") ?? "");
   const [saving, setSaving] = React.useState(false);
-
-  const account = accountId ?? defAccount;
 
   const history = React.useMemo(
     () => (txs ?? []).filter((t) => t.type === kind && t.note && t.categoryId != null).slice(0, 500).map((t) => ({ note: t.note, categoryId: t.categoryId! })),
@@ -229,9 +197,8 @@ function SimpleForm({ kind, tx, req, onDone }: { kind: "expense" | "income"; tx?
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount) return toast.error("Введи сумму");
-    if (account == null) return toast.error("Сначала создай счёт");
     const cat = categoryId ?? categories.find((c) => c.kind === kind && c.name.startsWith("Проч"))?.id;
-    const input = { type: kind, amount, date, accountId: account, categoryId: cat, note, tags: parseTags(tags) };
+    const input = { type: kind, amount, date, categoryId: cat, note, tags: parseTags(tags) };
     setSaving(true);
     try {
       if (tx) {
@@ -282,12 +249,11 @@ function SimpleForm({ kind, tx, req, onDone }: { kind: "expense" | "income"; tx?
         />
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <AccountSelect value={account} onChange={setAccountId} />
         <Field label="Дата">
           <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
         </Field>
+        <TagsInput value={tags} onChange={setTags} />
       </div>
-      <TagsInput value={tags} onChange={setTags} />
       {preview.length > 0 && (
         <div className="rounded-xl bg-primary-soft p-3 text-sm">
           <p className="font-medium">Автоотчисления в копилки</p>
@@ -312,71 +278,13 @@ function SimpleForm({ kind, tx, req, onDone }: { kind: "expense" | "income"; tx?
 
 /* ------------------------------------------------------------------ */
 
-function TransferForm({ tx, onDone }: { tx?: Transaction; onDone: () => void }) {
-  const accounts = useAccounts();
-  const txs = useTransactions();
-  const def = useDefaultAccount("transfer", txs, accounts);
-  const [from, setFrom] = React.useState<number | undefined>(tx?.accountId);
-  const [to, setTo] = React.useState<number | undefined>(tx?.toAccountId);
-  const [amount, setAmount] = React.useState<number | null>(tx?.amount ?? null);
-  const [date, setDate] = React.useState(tx?.date ?? todayISO());
-  const [note, setNote] = React.useState(tx?.note ?? "");
-
-  const fromId = from ?? def;
-  const toId = to ?? (accounts ?? []).find((a) => !a.archived && a.id !== fromId)?.id;
-
-  if (accounts && accounts.filter((a) => !a.archived).length < 2) {
-    return <p className="py-6 text-center text-sm text-muted-foreground">Для перевода нужно минимум два счёта. Добавь счёт в настройках.</p>;
-  }
-
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!amount) return toast.error("Введи сумму");
-    try {
-      const input = { type: "transfer" as const, amount, date, accountId: fromId!, toAccountId: toId, note };
-      if (tx) await updateTransaction(tx.id, input);
-      else await addTransaction(input);
-      toast.success("Перевод записан");
-      onDone();
-    } catch (err) {
-      toast.error((err as Error).message);
-    }
-  };
-
-  return (
-    <form onSubmit={save} className="grid gap-4">
-      <AmountInput value={amount} onChange={setAmount} size="lg" autoFocus={!tx} ariaLabel="Сумма" />
-      <div className="grid grid-cols-2 gap-3">
-        <AccountSelect label="Откуда" value={fromId} onChange={setFrom} />
-        <AccountSelect label="Куда" value={toId} onChange={setTo} exclude={fromId} />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Дата">
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
-        </Field>
-        <Field label="Заметка">
-          <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Снял наличные" />
-        </Field>
-      </div>
-      <p className="text-xs text-muted-foreground">Переводы не считаются ни расходом, ни приходом и не попадают в отчёты.</p>
-      <Button type="submit" size="lg">
-        {tx ? "Сохранить" : "Перевести"}
-      </Button>
-    </form>
-  );
-}
-
 /* ------------------------------------------------------------------ */
 
 function GoalForm({ tx, req, onDone }: { tx?: Transaction; req: EditorRequest; onDone: () => void }) {
   const goals = useGoals();
-  const accounts = useAccounts();
   const balances = useBalances();
-  const txs = useTransactions();
-  const def = useDefaultAccount("goal_deposit", txs, accounts);
   const [direction, setDirection] = React.useState<"deposit" | "withdraw">(tx ? (tx.type === "goal_withdraw" ? "withdraw" : "deposit") : (req.goalDirection ?? "deposit"));
   const [goalId, setGoalId] = React.useState<number | undefined>(tx?.goalId ?? req.goalId);
-  const [accountId, setAccountId] = React.useState<number | undefined>(tx?.accountId);
   const [amount, setAmount] = React.useState<number | null>(tx?.amount ?? null);
   const [date, setDate] = React.useState(tx?.date ?? todayISO());
   const [note, setNote] = React.useState(tx?.note ?? "");
@@ -384,7 +292,6 @@ function GoalForm({ tx, req, onDone }: { tx?: Transaction; req: EditorRequest; o
   const active = (goals ?? []).filter((g) => !g.archived || g.id === goalId);
   const gid = goalId ?? active[0]?.id;
   const goalBalance = (balances?.goals.get(gid ?? -1) ?? 0) + (tx && tx.type === "goal_withdraw" ? tx.amount : 0);
-  const account = accountId ?? def;
 
   if (goals && !active.length) return <p className="py-6 text-center text-sm text-muted-foreground">Сначала создай копилку.</p>;
 
@@ -393,10 +300,10 @@ function GoalForm({ tx, req, onDone }: { tx?: Transaction; req: EditorRequest; o
     if (!amount) return toast.error("Введи сумму");
     if (direction === "withdraw" && amount > goalBalance) return toast.error(`В копилке только ${formatMoney(goalBalance)}`);
     try {
-      const input = { type: direction === "deposit" ? ("goal_deposit" as const) : ("goal_withdraw" as const), amount, date, accountId: account!, goalId: gid, note };
+      const input = { type: direction === "deposit" ? ("goal_deposit" as const) : ("goal_withdraw" as const), amount, date, goalId: gid, note };
       if (tx) await updateTransaction(tx.id, input);
       else await addTransaction(input);
-      toast.success(direction === "deposit" ? "Копилка пополнена 🐷" : "Деньги вернулись на счёт");
+      toast.success(direction === "deposit" ? "Копилка пополнена 🐷" : "Деньги вернулись в свободные");
       onDone();
     } catch (err) {
       toast.error((err as Error).message);
@@ -424,14 +331,16 @@ function GoalForm({ tx, req, onDone }: { tx?: Transaction; req: EditorRequest; o
         </NativeSelect>
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <AccountSelect label={direction === "deposit" ? "Со счёта" : "На счёт"} value={account} onChange={setAccountId} />
         <Field label="Дата">
           <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
         </Field>
+        <Field label="Заметка">
+          <Input value={note} onChange={(e) => setNote(e.target.value)} />
+        </Field>
       </div>
-      <Field label="Заметка">
-        <Input value={note} onChange={(e) => setNote(e.target.value)} />
-      </Field>
+      {direction === "deposit" && balances && amount != null && amount > balances.totals.free && (
+        <p className="text-xs text-warning">Свободных денег сейчас {formatMoney(balances.totals.free)} — после пополнения уйдёшь в минус</p>
+      )}
       <Button type="submit" size="lg">
         {tx ? "Сохранить" : direction === "deposit" ? "Пополнить" : "Снять"}
       </Button>
@@ -461,13 +370,9 @@ function qtyOf(s: string): number {
 
 function ReceiptForm({ tx, onDone }: { tx?: Transaction; onDone: () => void }) {
   const categories = useCategories() ?? [];
-  const accounts = useAccounts();
-  const txs = useTransactions();
   const products = useProducts();
   const stores = useStores();
-  const def = useDefaultAccount("expense", txs, accounts);
 
-  const [accountId, setAccountId] = React.useState<number | undefined>(tx?.accountId);
   const [date, setDate] = React.useState(tx?.date ?? todayISO());
   const [store, setStore] = React.useState("");
   const [note, setNote] = React.useState(tx?.note ?? "");
@@ -525,7 +430,6 @@ function ReceiptForm({ tx, onDone }: { tx?: Transaction; onDone: () => void }) {
     if (!filled.length) return toast.error("Добавь хотя бы одну позицию с названием и суммой");
     const input = {
       date,
-      accountId: (accountId ?? def)!,
       storeName: store,
       note,
       tags: parseTags(tags),
@@ -561,8 +465,8 @@ function ReceiptForm({ tx, onDone }: { tx?: Transaction; onDone: () => void }) {
 
   return (
     <form onSubmit={save} className="grid gap-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Field label="Магазин" className="col-span-2 sm:col-span-1">
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Магазин">
           <Input value={store} onChange={(e) => setStore(e.target.value)} list="stores-list" placeholder="Magnum" autoComplete="off" />
           <datalist id="stores-list">
             {stores?.map((s) => (
@@ -570,7 +474,6 @@ function ReceiptForm({ tx, onDone }: { tx?: Transaction; onDone: () => void }) {
             ))}
           </datalist>
         </Field>
-        <AccountSelect value={accountId ?? def} onChange={setAccountId} />
         <Field label="Дата">
           <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
         </Field>
@@ -710,5 +613,52 @@ function RowAmount({ value, onChange, label }: { value: number | null; onChange:
       />
       <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">₸</span>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+function AdjustmentForm({ tx, onDone }: { tx: Transaction; onDone: () => void }) {
+  const [sign, setSign] = React.useState<"plus" | "minus">(tx.amount < 0 ? "minus" : "plus");
+  const [amount, setAmount] = React.useState<number | null>(Math.abs(tx.amount));
+  const [date, setDate] = React.useState(tx.date);
+  const [note, setNote] = React.useState(tx.note);
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!amount) return toast.error("Введи сумму");
+    try {
+      await updateTransaction(tx.id, { type: "adjustment", amount: sign === "minus" ? -amount : amount, date, note });
+      toast.success("Сохранено");
+      onDone();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
+
+  return (
+    <form onSubmit={save} className="grid gap-4">
+      <p className="text-sm text-muted-foreground">Корректировка меняет баланс, но не попадает в отчёты о тратах и доходах.</p>
+      <Segmented
+        value={sign}
+        onChange={setSign}
+        options={[
+          { value: "plus", label: "Добавить" },
+          { value: "minus", label: "Убрать" },
+        ]}
+      />
+      <AmountInput value={amount} onChange={setAmount} size="lg" ariaLabel="Сумма" />
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Дата">
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+        </Field>
+        <Field label="Заметка">
+          <Input value={note} onChange={(e) => setNote(e.target.value)} />
+        </Field>
+      </div>
+      <Button type="submit" size="lg">
+        Сохранить
+      </Button>
+    </form>
   );
 }

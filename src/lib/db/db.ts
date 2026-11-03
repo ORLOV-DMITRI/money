@@ -1,6 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
 import type {
-  Account,
   Budget,
   Category,
   Goal,
@@ -14,7 +13,6 @@ import type {
 } from "./schema";
 
 export class MoneyDB extends Dexie {
-  accounts!: EntityTable<Account, "id">;
   categories!: EntityTable<Category, "id">;
   transactions!: EntityTable<Transaction, "id">;
   purchaseItems!: EntityTable<PurchaseItem, "id">;
@@ -42,13 +40,39 @@ export class MoneyDB extends Dexie {
       templates: "++id",
       settings: "&key",
     });
+    // v2: «единые деньги» — без счетов и переводов.
+    // Начальные остатки счетов превращаются в одну корректировку «Начальный остаток».
+    this.version(2)
+      .stores({
+        transactions: "++id, date, type, categoryId, goalId, storeId, recurringId, parentId, *tags",
+      })
+      .upgrade(async (tx) => {
+        const accounts = (await tx.table("accounts").toArray()) as { initialBalance?: number; archived?: boolean }[];
+        const initial = accounts.filter((a) => !a.archived).reduce((s, a) => s + (a.initialBalance ?? 0), 0);
+        const txs = tx.table("transactions");
+        await txs.where("type").equals("transfer").delete();
+        await txs.toCollection().modify((t: Record<string, unknown>) => {
+          delete t.accountId;
+          delete t.toAccountId;
+        });
+        if (initial !== 0) {
+          const first = (await txs.orderBy("date").first()) as { date: string } | undefined;
+          const now = Date.now();
+          await txs.add({ type: "adjustment", amount: initial, date: first?.date ?? new Date().toISOString().slice(0, 10), note: "Начальный остаток", tags: [], createdAt: now, updatedAt: now });
+        }
+        for (const name of ["recurring", "templates"]) {
+          await tx.table(name).toCollection().modify((r: Record<string, unknown>) => {
+            delete r.accountId;
+          });
+        }
+      });
+    this.version(3).stores({ accounts: null });
   }
 }
 
 export const db = new MoneyDB();
 
 export const ALL_TABLES = [
-  "accounts",
   "categories",
   "transactions",
   "purchaseItems",

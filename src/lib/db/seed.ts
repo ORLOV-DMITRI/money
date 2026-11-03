@@ -1,4 +1,4 @@
-import type { Account, Category } from "./schema";
+import type { Category } from "./schema";
 import { db } from "./db";
 
 type CategorySeed = Omit<Category, "id" | "archived" | "order">;
@@ -36,14 +36,9 @@ export const DEFAULT_INCOME_CATEGORIES: CategorySeed[] = [
   { name: "Прочие доходы", kind: "income", icon: "➕", color: "#64748b", keywords: [] },
 ];
 
-export const DEFAULT_ACCOUNTS: Omit<Account, "id" | "createdAt">[] = [
-  { name: "Наличные", type: "cash", icon: "💵", color: "#16a34a", initialBalance: 0, archived: false, order: 0 },
-  { name: "Kaspi Gold", type: "card", icon: "💳", color: "#ef4444", initialBalance: 0, archived: false, order: 1 },
-];
-
-/** Заполняет пустую базу стартовыми категориями и счетами. Безопасно вызывать многократно. */
+/** Заполняет пустую базу стартовыми категориями. Безопасно вызывать многократно. */
 export async function ensureSeeded(): Promise<void> {
-  await db.transaction("rw", db.categories, db.accounts, async () => {
+  await db.transaction("rw", db.categories, async () => {
     if ((await db.categories.count()) === 0) {
       await db.categories.bulkAdd(
         [...DEFAULT_EXPENSE_CATEGORIES, ...DEFAULT_INCOME_CATEGORIES].map((c, i) => ({
@@ -52,10 +47,6 @@ export async function ensureSeeded(): Promise<void> {
           order: i,
         })),
       );
-    }
-    if ((await db.accounts.count()) === 0) {
-      const now = Date.now();
-      await db.accounts.bulkAdd(DEFAULT_ACCOUNTS.map((a) => ({ ...a, createdAt: now })));
     }
   });
 }

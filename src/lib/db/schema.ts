@@ -3,20 +3,6 @@ import type { Frequency, ISODate } from "@/lib/dates";
 /** Все суммы — целые тиыны. */
 export type Tiyn = number;
 
-export type AccountType = "cash" | "card" | "deposit" | "other";
-
-export interface Account {
-  id: number;
-  name: string;
-  type: AccountType;
-  icon: string;
-  color: string;
-  initialBalance: Tiyn;
-  archived: boolean;
-  order: number;
-  createdAt: number;
-}
-
 export type CategoryKind = "expense" | "income";
 
 export interface Category {
@@ -31,15 +17,17 @@ export interface Category {
   order: number;
 }
 
-export type TransactionType = "expense" | "income" | "transfer" | "goal_deposit" | "goal_withdraw";
+/**
+ * adjustment — корректировка баланса: стартовый остаток или сверка с реальностью.
+ * Только у неё amount может быть отрицательным; в отчёты по тратам не попадает.
+ */
+export type TransactionType = "expense" | "income" | "goal_deposit" | "goal_withdraw" | "adjustment";
 
 export interface Transaction {
   id: number;
   type: TransactionType;
   amount: Tiyn;
   date: ISODate;
-  accountId: number;
-  toAccountId?: number;
   categoryId?: number;
   goalId?: number;
   storeId?: number;
@@ -115,7 +103,6 @@ export interface Recurring {
   name: string;
   type: "expense" | "income";
   amount: Tiyn;
-  accountId: number;
   categoryId: number;
   frequency: Frequency;
   interval: number;
@@ -130,7 +117,6 @@ export interface Template {
   name: string;
   type: "expense" | "income";
   amount: Tiyn;
-  accountId: number;
   categoryId: number;
   note: string;
 }
@@ -139,14 +125,6 @@ export interface Setting {
   key: string;
   value: unknown;
 }
-
-
-export const ACCOUNT_TYPE_LABEL: Record<AccountType, string> = {
-  cash: "Наличные",
-  card: "Карта",
-  deposit: "Депозит",
-  other: "Другое",
-};
 
 export function normalizeKey(name: string): string {
   return name.trim().toLowerCase().replace(/ё/g, "е").replace(/\s+/g, " ");

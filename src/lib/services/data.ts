@@ -49,7 +49,7 @@ export async function resetAll(): Promise<void> {
 const TYPE_LABEL: Record<string, string> = {
   expense: "Расход",
   income: "Приход",
-  transfer: "Перевод",
+  adjustment: "Корректировка",
   goal_deposit: "В копилку",
   goal_withdraw: "Из копилки",
 };
@@ -61,9 +61,8 @@ function csvCell(v: string | number): string {
 
 /** CSV для Excel: разделитель «;», запятая в дробной части, BOM для кириллицы */
 export async function exportCSV(): Promise<string> {
-  const [txs, accounts, categories, goals, stores, items, products] = await Promise.all([
+  const [txs, categories, goals, stores, items, products] = await Promise.all([
     db.transactions.orderBy("date").toArray(),
-    db.accounts.toArray(),
     db.categories.toArray(),
     db.goals.toArray(),
     db.stores.toArray(),
@@ -78,13 +77,11 @@ export async function exportCSV(): Promise<string> {
     l.push(`${p} ${it.quantity}${it.unit}`);
     itemsByTx.set(it.transactionId, l);
   }
-  const header = ["Дата", "Тип", "Сумма", "Счёт", "Счёт получатель", "Категория", "Копилка", "Магазин", "Позиции", "Заметка", "Теги"];
+  const header = ["Дата", "Тип", "Сумма", "Категория", "Копилка", "Магазин", "Позиции", "Заметка", "Теги"];
   const rows = txs.map((t) => [
     t.date,
     TYPE_LABEL[t.type],
-    String(fromTiyn(t.type === "expense" ? -t.amount : t.amount)).replace(".", ","),
-    name(accounts, t.accountId),
-    name(accounts, t.toAccountId),
+    String(fromTiyn(t.type === "expense" || t.type === "goal_deposit" ? -t.amount : t.amount)).replace(".", ","),
     name(categories, t.categoryId),
     name(goals, t.goalId),
     name(stores, t.storeId),

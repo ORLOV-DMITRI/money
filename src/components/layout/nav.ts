@@ -9,7 +9,6 @@ import {
   Settings,
   Tags,
   Target,
-  Wallet,
 } from "lucide-react";
 
 export interface NavItem {
@@ -29,7 +28,6 @@ export const SECONDARY_NAV: NavItem[] = [
   { href: "/products/", label: "Продукты и цены", icon: Package },
   { href: "/budgets/", label: "Бюджеты", icon: Target },
   { href: "/recurring/", label: "Регулярные платежи", icon: Repeat },
-  { href: "/accounts/", label: "Счета", icon: Wallet },
   { href: "/categories/", label: "Категории", icon: Tags },
   { href: "/settings/", label: "Настройки", icon: Settings },
 ];

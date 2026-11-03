@@ -1,12 +1,16 @@
 "use client";
 
-import { ArrowDownLeft, ArrowUpRight, Bell, ChevronRight, Sparkles } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Bell, ChevronRight, Scale, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge, EmptyState, IconBubble, Skeleton } from "@/components/ui/misc";
+import { Badge, IconBubble, Skeleton } from "@/components/ui/misc";
+import { Dialog } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/input";
+import { AmountInput } from "@/components/ui/amount-input";
+import { ReconcileDialog } from "@/components/balance/reconcile-dialog";
 import { Money } from "@/components/ui/money";
 import { QuickInputBar } from "@/components/transactions/quick-input-bar";
 import { TxList } from "@/components/transactions/tx-list";
@@ -14,7 +18,7 @@ import { useTxEditor } from "@/components/transactions/tx-editor";
 import { GoalCard } from "@/components/goals/goal-card";
 import { BudgetRow } from "@/components/budgets/budget-row";
 import { InsightList } from "@/components/insights/insight-list";
-import { useAccounts, useBalances, useCategories, useItems, useLookups, useRecurring, useTemplates, useToday, useTransactions } from "@/hooks/use-data";
+import { useBalances, useCategories, useItems, useLookups, useRecurring, useTemplates, useToday, useTransactions } from "@/hooks/use-data";
 import { useBudgetStatuses, useGoalStats, useInsights } from "@/hooks/use-analytics";
 import { summarize } from "@/lib/analytics/reports";
 import { formatDayHeading, formatPeriod, getPeriod, previousPeriod } from "@/lib/dates";
@@ -28,6 +32,7 @@ export function DashboardView() {
   const txs = useTransactions();
   const today = useToday();
   const [loadingDemo, setLoadingDemo] = useState(false);
+  const [start, setStart] = useState<number | null>(null);
   const openEditor = useTxEditor();
 
   if (!txs) return <DashboardSkeleton />;
@@ -36,30 +41,51 @@ export function DashboardView() {
     return (
       <div className="mx-auto max-w-xl pt-6">
         <Card>
-          <EmptyState
-            icon="👋"
-            title="Привет! Это твой учёт денег в тенге"
-            description="Записывай расходы и приходы, собирай копилки, следи за ценами на продукты и смотри отчёты. Все данные хранятся только на этом устройстве."
-            action={
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Button onClick={() => openEditor()}>Записать первую операцию</Button>
-                <Button
-                  variant="outline"
-                  disabled={loadingDemo}
-                  onClick={async () => {
-                    setLoadingDemo(true);
-                    await loadDemoData(today);
-                    setLoadingDemo(false);
-                    toast.success("Демо-данные загружены. Сбросить их можно в настройках");
-                  }}
-                >
-                  <Sparkles /> {loadingDemo ? "Заполняю…" : "Посмотреть на примере"}
-                </Button>
+          <CardContent className="grid gap-5 p-6 text-center sm:p-8">
+            <div>
+              <div className="text-4xl" aria-hidden>
+                👋
               </div>
-            }
-          />
+              <h1 className="mt-2 text-lg font-semibold">Привет! Это ваш учёт денег в тенге</h1>
+              <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+                Записывайте расходы и приходы, собирайте копилки, следите за ценами и смотрите отчёты.
+              </p>
+            </div>
+            <form
+              className="grid gap-2 text-left"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!start) return toast.error("Введи сумму");
+                await addTransaction({ type: "adjustment", amount: start, date: today, note: "Начальный остаток" });
+                toast.success("Отлично, можно записывать траты!");
+              }}
+            >
+              <Label htmlFor="start-balance">Сколько у вас сейчас денег? (наличные + карты, без депозита)</Label>
+              <div className="flex gap-2">
+                <AmountInput id="start-balance" value={start} onChange={setStart} className="flex-1" />
+                <Button type="submit">Начать</Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Депозит и накопления потом добавишь копилками.</p>
+            </form>
+            <div className="flex flex-col items-center gap-1 border-t pt-4">
+              <Button
+                variant="ghost"
+                disabled={loadingDemo}
+                onClick={async () => {
+                  setLoadingDemo(true);
+                  await loadDemoData(today);
+                  setLoadingDemo(false);
+                  toast.success("Демо-данные загружены. Сбросить их можно в настройках");
+                }}
+              >
+                <Sparkles /> {loadingDemo ? "Заполняю…" : "Или посмотреть на примере"}
+              </Button>
+              <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => openEditor()}>
+                Начать без остатка
+              </button>
+            </div>
+          </CardContent>
         </Card>
-        <QuickInputBar className="mt-4" />
       </div>
     );
   }
@@ -75,7 +101,6 @@ export function DashboardView() {
       </div>
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
         <InsightsCard />
-        <AccountsCard />
         <GoalsCard />
         <BudgetsCard />
       </div>
@@ -94,6 +119,7 @@ function DashboardSkeleton() {
 }
 
 function BalanceCard() {
+  const [reconcile, setReconcile] = useState(false);
   const balances = useBalances();
   const txs = useTransactions();
   const today = useToday();
@@ -113,14 +139,22 @@ function BalanceCard() {
   const { totals } = balances;
   return (
     <Card className="overflow-hidden">
+      <Dialog open={reconcile} onOpenChange={setReconcile}>
+        {reconcile && <ReconcileDialog onDone={() => setReconcile(false)} />}
+      </Dialog>
       <div className="bg-gradient-to-br from-primary/15 via-primary/5 to-transparent p-5">
-        <p className="text-sm text-muted-foreground">Всего денег</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm text-muted-foreground">Всего денег</p>
+          <Button variant="ghost" size="sm" className="-mr-2 -mt-1 h-7" onClick={() => setReconcile(true)}>
+            <Scale /> Сверить
+          </Button>
+        </div>
         <p className="mt-1 text-4xl font-bold tracking-tight tabular-nums">{formatMoney(totals.total)}</p>
         <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
-          <Link href="/accounts/" className="hover:underline">
+          <span>
             <span className="text-muted-foreground">Свободно </span>
-            <span className="font-semibold tabular-nums">{formatMoney(totals.free)}</span>
-          </Link>
+            <span className={cn("font-semibold tabular-nums", totals.free < 0 && "text-destructive")}>{formatMoney(totals.free)}</span>
+          </span>
           <Link href="/goals/" className="hover:underline">
             <span className="text-muted-foreground">В копилках </span>
             <span className="font-semibold tabular-nums">{formatMoney(totals.saved)}</span>
@@ -173,7 +207,7 @@ function TemplatesRow() {
             key={t.id}
             type="button"
             onClick={async () => {
-              const { id } = await addTransaction({ type: t.type, amount: t.amount, accountId: t.accountId, categoryId: t.categoryId, note: t.note, date: today });
+              const { id } = await addTransaction({ type: t.type, amount: t.amount, categoryId: t.categoryId, note: t.note, date: today });
               toast.success(`${t.name}: ${formatMoney(t.amount)}`, {
                 action: { label: "Отменить", onClick: () => void deleteTransaction(id) },
               });
@@ -264,33 +298,6 @@ function InsightsCard() {
       </CardHeader>
       <CardContent className="pt-3">
         <InsightList insights={insights.slice(0, 4)} />
-      </CardContent>
-    </Card>
-  );
-}
-
-function AccountsCard() {
-  const accounts = useAccounts();
-  const balances = useBalances();
-  const active = (accounts ?? []).filter((a) => !a.archived);
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Счета</CardTitle>
-        <Button asChild variant="link" size="sm">
-          <Link href="/accounts/">
-            Управлять <ChevronRight />
-          </Link>
-        </Button>
-      </CardHeader>
-      <CardContent className="grid gap-2 pt-3">
-        {active.map((a) => (
-          <div key={a.id} className="flex items-center gap-3">
-            <IconBubble icon={a.icon} color={a.color} size="sm" />
-            <span className="flex-1 truncate text-sm">{a.name}</span>
-            <span className="text-sm font-semibold tabular-nums">{formatMoney(balances?.accounts.get(a.id) ?? 0)}</span>
-          </div>
-        ))}
       </CardContent>
     </Card>
   );

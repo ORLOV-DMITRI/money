@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/misc";
-import { useAccounts, useCategories, useProducts, useStores, useTransactions, useToday } from "@/hooks/use-data";
+import { useCategories, useProducts, useStores, useTransactions, useToday } from "@/hooks/use-data";
 import { parseQuickInput } from "@/lib/quick-input";
 import { suggestCategory } from "@/lib/categorize";
 import { normalizeKey } from "@/lib/db/schema";
@@ -14,49 +14,43 @@ import { formatMoney } from "@/lib/money";
 import { addReceipt, addTransaction, deleteTransaction } from "@/lib/services/transactions";
 import { cn } from "@/lib/utils";
 
-const EXAMPLES = ["кофе 1200", "+350000 зарплата", "такси 2 500 вчера #работа", "молоко 2x650 magnum", "бензин 15000 наличные"];
+const EXAMPLES = ["кофе 1200", "+350000 зарплата", "такси 2 500 вчера #работа", "молоко 2x650 magnum", "обед 1500+1200"];
 
 export function QuickInputBar({ className }: { className?: string }) {
   const [text, setText] = useState("");
   const [help, setHelp] = useState(false);
   const today = useToday();
-  const accounts = useAccounts();
   const categories = useCategories();
   const stores = useStores();
   const products = useProducts();
   const txs = useTransactions();
 
   const plan = useMemo(() => {
-    if (!text.trim() || !accounts || !categories) return null;
-    const p = parseQuickInput(text, { today, stores, accounts: accounts.filter((a) => !a.archived) });
+    if (!text.trim() || !categories) return null;
+    const p = parseQuickInput(text, { today, stores });
     const history = (txs ?? []).filter((t) => t.type === p.type && t.note && t.categoryId != null).slice(0, 500).map((t) => ({ note: t.note, categoryId: t.categoryId! }));
     const product = p.type === "expense" ? products?.find((x) => x.key === normalizeKey(p.description)) : undefined;
     const categoryId =
       product?.categoryId ??
       suggestCategory(p.description, categories, history, p.type) ??
       categories.find((c) => c.kind === p.type && c.name.startsWith("Проч"))?.id;
-    const lastAcc = txs?.find((t) => t.type === p.type)?.accountId;
-    const accountId = p.accountId ?? lastAcc ?? accounts.find((a) => !a.archived)?.id;
     const asItem = p.type === "expense" && (p.quantity != null || product != null);
-    return { ...p, categoryId, accountId, product, asItem };
-  }, [text, today, accounts, categories, stores, products, txs]);
+    return { ...p, categoryId, product, asItem };
+  }, [text, today, categories, stores, products, txs]);
 
   const cat = plan?.categoryId != null ? categories?.find((c) => c.id === plan.categoryId) : undefined;
-  const acc = plan?.accountId != null ? accounts?.find((a) => a.id === plan.accountId) : undefined;
   const store = plan?.storeId != null ? stores?.find((s) => s.id === plan.storeId) : undefined;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!plan) return;
     if (!plan.amount) return toast.error("Не вижу сумму. Например: «кофе 1200»");
-    if (plan.accountId == null) return toast.error("Сначала создай счёт");
     try {
       let id: number;
       if (plan.asItem) {
         const quantity = plan.quantity ?? 1;
         id = await addReceipt({
           date: plan.date,
-          accountId: plan.accountId,
           storeName: store?.name,
           tags: plan.tags,
           items: [
@@ -77,7 +71,6 @@ export function QuickInputBar({ className }: { className?: string }) {
             type: plan.type,
             amount: plan.amount,
             date: plan.date,
-            accountId: plan.accountId,
             categoryId: plan.categoryId,
             storeId: plan.storeId,
             note: desc,
@@ -135,11 +128,6 @@ export function QuickInputBar({ className }: { className?: string }) {
           )}
           {plan.description && <Badge>«{plan.description}»</Badge>}
           {store && <Badge>🏪 {store.name}</Badge>}
-          {acc && (
-            <Badge>
-              {acc.icon} {acc.name}
-            </Badge>
-          )}
           <Badge>{formatDayHeading(plan.date, today)}</Badge>
           {plan.tags.map((t) => (
             <Badge key={t} tone="primary">
@@ -158,7 +146,7 @@ export function QuickInputBar({ className }: { className?: string }) {
               </button>
             ))}
           </div>
-          <p>«+» в начале — приход. «2x650» — количество × цена (запишется как продукт). «вчера», «12.10» — дата. «#тег» — тег. Название магазина или счёта тоже распознаётся.</p>
+          <p>«+» в начале — приход. «2x650» — количество × цена (запишется как продукт). «вчера», «12.10» — дата. «#тег» — тег. Название магазина тоже распознаётся. Можно считать: «1500+1200».</p>
         </div>
       )}
     </div>

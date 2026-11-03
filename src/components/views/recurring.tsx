@@ -10,7 +10,7 @@ import { Dialog, DialogContent, useConfirm } from "@/components/ui/dialog";
 import { Field, Input, NativeSelect } from "@/components/ui/input";
 import { AmountInput } from "@/components/ui/amount-input";
 import { Badge, EmptyState, IconBubble, Segmented, Skeleton, Switch } from "@/components/ui/misc";
-import { useAccounts, useCategories, useLookups, useRecurring, useToday } from "@/hooks/use-data";
+import { useCategories, useLookups, useRecurring, useToday } from "@/hooks/use-data";
 import { db } from "@/lib/db/db";
 import type { Recurring, RecurringMode } from "@/lib/db/schema";
 import { formatDayHeading, formatFrequency, type Frequency } from "@/lib/dates";
@@ -99,14 +99,12 @@ export function RecurringView() {
 }
 
 function RecurringDialog({ item, onDone }: { item?: Recurring; onDone: () => void }) {
-  const accounts = (useAccounts() ?? []).filter((a) => !a.archived || a.id === item?.accountId);
   const categories = useCategories() ?? [];
   const today = useToday();
   const confirm = useConfirm();
   const [name, setName] = useState(item?.name ?? "");
   const [type, setType] = useState<"expense" | "income">(item?.type ?? "expense");
   const [amount, setAmount] = useState<number | null>(item?.amount ?? null);
-  const [accountId, setAccountId] = useState<number | undefined>(item?.accountId);
   const [categoryId, setCategoryId] = useState<number | undefined>(item?.categoryId);
   const [frequency, setFrequency] = useState<Frequency>(item?.frequency ?? "month");
   const [interval, setInterval] = useState(item?.interval ?? 1);
@@ -114,13 +112,12 @@ function RecurringDialog({ item, onDone }: { item?: Recurring; onDone: () => voi
   const [mode, setMode] = useState<RecurringMode>(item?.mode ?? "remind");
 
   const cats = categories.filter((c) => c.kind === type && !c.archived);
-  const acc = accountId ?? accounts[0]?.id;
   const cat = categoryId != null && cats.some((c) => c.id === categoryId) ? categoryId : cats[0]?.id;
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !amount || acc == null || cat == null) return toast.error("Заполни название и сумму");
-    const data = { name: name.trim(), type, amount, accountId: acc, categoryId: cat, frequency, interval: Math.max(1, interval), nextDate, mode };
+    if (!name.trim() || !amount || cat == null) return toast.error("Заполни название и сумму");
+    const data = { name: name.trim(), type, amount, categoryId: cat, frequency, interval: Math.max(1, interval), nextDate, mode };
     if (item) await db.recurring.update(item.id, data);
     else await db.recurring.add({ ...data, active: true, createdAt: Date.now() });
     const created = await processRecurring(today);
@@ -150,26 +147,15 @@ function RecurringDialog({ item, onDone }: { item?: Recurring; onDone: () => voi
             <Input type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} required />
           </Field>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Счёт">
-            <NativeSelect value={acc ?? ""} onChange={(e) => setAccountId(Number(e.target.value))}>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.icon} {a.name}
-                </option>
-              ))}
-            </NativeSelect>
-          </Field>
-          <Field label="Категория">
-            <NativeSelect value={cat ?? ""} onChange={(e) => setCategoryId(Number(e.target.value))}>
-              {cats.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.icon} {c.name}
-                </option>
-              ))}
-            </NativeSelect>
-          </Field>
-        </div>
+        <Field label="Категория">
+          <NativeSelect value={cat ?? ""} onChange={(e) => setCategoryId(Number(e.target.value))}>
+            {cats.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.icon} {c.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </Field>
         <div className="grid grid-cols-[5rem_1fr] gap-3">
           <Field label="Каждые">
             <Input type="number" min={1} max={365} value={interval} onChange={(e) => setInterval(Number(e.target.value) || 1)} />

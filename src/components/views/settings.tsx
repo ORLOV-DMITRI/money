@@ -12,7 +12,7 @@ import { Dialog, DialogContent, useConfirm } from "@/components/ui/dialog";
 import { Field, Input, NativeSelect } from "@/components/ui/input";
 import { AmountInput } from "@/components/ui/amount-input";
 import { Segmented } from "@/components/ui/misc";
-import { useAccounts, useCategories, useTemplates, useToday } from "@/hooks/use-data";
+import { useCategories, useTemplates, useToday } from "@/hooks/use-data";
 import { db } from "@/lib/db/db";
 import { loadDemoData } from "@/lib/db/demo";
 import type { Template } from "@/lib/db/schema";
@@ -166,21 +166,18 @@ function TemplatesCard() {
 }
 
 function TemplateDialog({ template, onDone }: { template?: Template; onDone: () => void }) {
-  const accounts = (useAccounts() ?? []).filter((a) => !a.archived);
   const categories = useCategories() ?? [];
   const [name, setName] = useState(template?.name ?? "");
   const [type, setType] = useState<"expense" | "income">(template?.type ?? "expense");
   const [amount, setAmount] = useState<number | null>(template?.amount ?? null);
-  const [accountId, setAccountId] = useState(template?.accountId);
   const [categoryId, setCategoryId] = useState(template?.categoryId);
   const cats = categories.filter((c) => c.kind === type && !c.archived);
-  const acc = accountId ?? accounts[0]?.id;
   const cat = categoryId != null && cats.some((c) => c.id === categoryId) ? categoryId : cats[0]?.id;
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !amount || acc == null || cat == null) return toast.error("Заполни название и сумму");
-    const data = { name: name.trim(), type, amount, accountId: acc, categoryId: cat, note: name.trim() };
+    if (!name.trim() || !amount || cat == null) return toast.error("Заполни название и сумму");
+    const data = { name: name.trim(), type, amount, categoryId: cat, note: name.trim() };
     if (template) await db.templates.update(template.id, data);
     else await db.templates.add(data);
     onDone();
@@ -210,15 +207,6 @@ function TemplateDialog({ template, onDone }: { template?: Template; onDone: () 
             {cats.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.icon} {c.name}
-              </option>
-            ))}
-          </NativeSelect>
-        </Field>
-        <Field label="Счёт">
-          <NativeSelect value={acc ?? ""} onChange={(e) => setAccountId(Number(e.target.value))}>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.icon} {a.name}
               </option>
             ))}
           </NativeSelect>

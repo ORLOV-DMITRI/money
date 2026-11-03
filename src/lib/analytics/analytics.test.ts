@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Transaction } from "@/lib/db/schema";
-import { accountBalances, balanceTotals, goalBalances } from "./balances";
+import { balanceTotals, goalBalances } from "./balances";
 import { autoDeposits, goalStats } from "./goals";
 import { budgetStatus, crossedThreshold } from "./budgets";
 import { byCategory, expenseEntries, summarize } from "./reports";
@@ -11,7 +11,6 @@ let seq = 1;
 const tx = (t: Partial<Transaction> & Pick<Transaction, "type" | "amount">): Transaction => ({
   id: seq++,
   date: "2026-11-01",
-  accountId: 1,
   note: "",
   tags: [],
   createdAt: 0,
@@ -21,26 +20,24 @@ const tx = (t: Partial<Transaction> & Pick<Transaction, "type" | "amount">): Tra
 
 describe("балансы", () => {
   const txs = [
+    tx({ type: "adjustment", amount: 50 }),
     tx({ type: "income", amount: 1000 }),
     tx({ type: "expense", amount: 300 }),
-    tx({ type: "transfer", amount: 200, toAccountId: 2 }),
     tx({ type: "goal_deposit", amount: 100, goalId: 7 }),
-    tx({ type: "goal_withdraw", amount: 40, goalId: 7, accountId: 2 }),
+    tx({ type: "goal_withdraw", amount: 40, goalId: 7 }),
+    tx({ type: "adjustment", amount: -20, note: "Сверка" }),
   ];
-  it("счета учитывают переводы и копилки", () => {
-    const b = accountBalances([{ id: 1, initialBalance: 50 }, { id: 2, initialBalance: 0 }], txs);
-    expect(b.get(1)).toBe(50 + 1000 - 300 - 200 - 100);
-    expect(b.get(2)).toBe(200 + 40);
-  });
-  it("копилки и итог: перевод не меняет общий баланс", () => {
+  it("свободные деньги, копилки и итог", () => {
     expect(goalBalances(txs).get(7)).toBe(60);
-    const t = balanceTotals(
-      [{ id: 1, initialBalance: 50, archived: false }, { id: 2, initialBalance: 0, archived: false }],
-      [{ id: 7, archived: false }],
-      txs,
-    );
-    expect(t).toEqual({ free: 690, saved: 60, total: 750 });
-    expect(t.total).toBe(50 + 1000 - 300);
+    const t = balanceTotals([{ id: 7, archived: false }], txs);
+    expect(t).toEqual({ free: 50 + 1000 - 300 - 100 + 40 - 20, saved: 60, total: 50 + 1000 - 300 - 20 });
+  });
+  it("деньги закрытой копилки остаются в итоге", () => {
+    expect(balanceTotals([{ id: 7, archived: true }], txs).saved).toBe(60);
+  });
+  it("корректировка не попадает в приход и расход", () => {
+    const s = summarize(txs, getPeriod("month", "2026-11-01"));
+    expect(s).toMatchObject({ income: 1000, expense: 300 });
   });
 });
 
@@ -60,9 +57,9 @@ describe("отчёты", () => {
     ]);
     expect(cats.reduce((s, c) => s + c.share, 0)).toBeCloseTo(1);
   });
-  it("итоги не учитывают переводы, средний расход — по прошедшим дням", () => {
+  it("итоги не учитывают корректировки, средний расход — по прошедшим дням", () => {
     const s = summarize(
-      [tx({ type: "income", amount: 1000 }), tx({ type: "expense", amount: 300, date: "2026-11-02" }), tx({ type: "transfer", amount: 999, toAccountId: 2 })],
+      [tx({ type: "income", amount: 1000 }), tx({ type: "expense", amount: 300, date: "2026-11-02" }), tx({ type: "adjustment", amount: 999 })],
       getPeriod("month", "2026-11-01"),
       "2026-11-03",
     );
@@ -151,5 +148,14 @@ describe("продукты", () => {
     expect(s.byStore[1]).toMatchObject({ storeId: 1, avg: 55_000 });
     expect(s.avg).toBe(54_000); // 540 ₸, округлено до тенге
     expect(s.min).toBe(50_000);
+  });
+});
+
+describe("подсказки", () => {
+  it("не делает выводов о днях недели по паре дней истории", async () => {
+    const { buildInsights } = await import("./insights");
+    const txs = [tx({ type: "expense", amount: 11_500, date: "2026-11-03" })];
+    const res = buildInsights({ today: "2026-11-03", txs, items: [], categories: [], products: [], budgets: [], goals: [] });
+    expect(res.find((i) => i.id === "weekday")).toBeUndefined();
   });
 });

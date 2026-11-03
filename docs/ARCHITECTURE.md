@@ -24,11 +24,12 @@ src/
   app/                      # маршруты: тонкие page.tsx (metadata + view)
     page.tsx                # Главная
     transactions/ reports/ goals/ goals/view/ products/ products/view/
-    budgets/ recurring/ accounts/ categories/ settings/
+    budgets/ recurring/ categories/ settings/
   components/
     ui/                     # button, input, dialog (шторка на телефоне), dropdown, misc, money, amount-input, pickers
     layout/                 # app-shell (навигация), providers, theme, bootstrap, nav
-    transactions/           # tx-editor (расход/приход/перевод/чек/копилка), tx-list, quick-input-bar, category-grid
+    transactions/           # tx-editor (расход/приход/чек/копилка/корректировка), tx-list, quick-input-bar, category-grid
+    balance/                # reconcile-dialog — «Сверить баланс»
     charts/                 # series-chart, category-bars, heatmap, period-picker
     goals/ budgets/ insights/
     views/                  # экраны целиком: dashboard, transactions, reports, goals, goal-detail, …
@@ -53,17 +54,12 @@ public/                     # manifest.webmanifest, sw.js, иконки
 Все суммы — целые числа в **тиынах**. Даты операций — строка `YYYY-MM-DD` (локальная дата, без часовых поясов), метки времени — `number` (ms).
 
 ```ts
-Account      { id, name, type: 'cash'|'card'|'deposit'|'other', icon, color,
-               initialBalance, archived, order, createdAt }
-
 Category     { id, name, kind: 'expense'|'income', icon, color,
                keywords: string[], archived, order }
 
-Transaction  { id, type: 'expense'|'income'|'transfer'|'goal_deposit'|'goal_withdraw',
-               amount,                 // > 0, тиыны
+Transaction  { id, type: 'expense'|'income'|'goal_deposit'|'goal_withdraw'|'adjustment',
+               amount,                 // тиыны; > 0, только у adjustment может быть < 0
                date,                   // 'YYYY-MM-DD'
-               accountId,              // счёт списания/зачисления
-               toAccountId?,           // для transfer
                categoryId?,            // для expense/income без чека
                goalId?,                // для goal_*
                storeId?,               // для чека
@@ -82,24 +78,23 @@ Goal         { id, name, icon, color, target, deadline?, autoPercent,
 
 Budget       { id, categoryId, limit, period: 'month'|'week' }
 
-Recurring    { id, name, type: 'expense'|'income', amount, accountId, categoryId,
+Recurring    { id, name, type: 'expense'|'income', amount, categoryId,
                frequency: 'day'|'week'|'month'|'year', interval, nextDate,
                mode: 'auto'|'remind', active, createdAt }
 
-Template     { id, name, type: 'expense'|'income', amount, accountId, categoryId, note }
+Template     { id, name, type: 'expense'|'income', amount, categoryId, note }
 
 Setting      { key, value }
 ```
 
-### Индексы Dexie (v1)
+### Индексы Dexie (v3)
 
 ```
-accounts:      ++id, order
 categories:    ++id, kind, order
-transactions:  ++id, date, type, accountId, toAccountId, categoryId, goalId, storeId, recurringId, parentId, *tags
+transactions:  ++id, date, type, categoryId, goalId, storeId, recurringId, parentId, *tags
 purchaseItems: ++id, transactionId, productId, categoryId, storeId, date
-products:      ++id, &name
-stores:        ++id, &name
+products:      ++id, &key
+stores:        ++id, &key
 goals:         ++id
 budgets:       ++id, categoryId
 recurring:     ++id, nextDate
@@ -107,11 +102,13 @@ templates:     ++id
 settings:      &key
 ```
 
+История версий: v1 — со счетами; v2 — переводы удалены, `accountId` убран, начальные остатки счетов сложены в корректировку «Начальный остаток»; v3 — таблица `accounts` удалена. Миграция покрыта тестом.
+
 ## Ключевые потоки
 
 **Расходы по категориям.** Для каждой транзакции `expense`: если у неё есть позиции чека — сумма раскладывается по `categoryId` позиций, иначе целиком идёт в `categoryId` транзакции.
 
-**Баланс счёта.** `initialBalance + Σ income − Σ expense − Σ transfer(out) + Σ transfer(in) − Σ goal_deposit + Σ goal_withdraw`.
+**Свободные деньги.** `Σ adjustment + Σ income − Σ expense − Σ goal_deposit + Σ goal_withdraw`. Отчёты о тратах и доходах корректировки не учитывают.
 
 **Баланс копилки.** `Σ goal_deposit − Σ goal_withdraw` по `goalId`.
 

@@ -93,7 +93,7 @@ export function GoalDetailView() {
               onSelect={async () => {
                 const ok = await confirm({
                   title: `Удалить «${goal.name}»?`,
-                  description: "Все пополнения и снятия удалятся, деньги вернутся на счета, с которых пополняли.",
+                  description: "Все пополнения и снятия удалятся, деньги вернутся в свободные.",
                   confirmText: "Удалить",
                   destructive: true,
                 });
