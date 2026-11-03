@@ -4,7 +4,7 @@ import { ensureSeeded } from "./seed";
 import { normalizeKey, type PurchaseItem, type Transaction, type Unit } from "./schema";
 import { resetAll } from "@/lib/services/data";
 import { processRecurring } from "@/lib/services/recurring";
-import { addFrequency, eachDay, parseISODate, toISODate, type ISODate } from "@/lib/dates";
+import { addFrequency, daysBetween, eachDay, parseISODate, toISODate, type ISODate } from "@/lib/dates";
 import { autoDeposits } from "@/lib/analytics/goals";
 
 /** Детерминированный ГПСЧ, чтобы демо выглядело одинаково от запуска к запуску */
@@ -131,7 +131,7 @@ export async function loadDemoData(today: ISODate): Promise<void> {
   for (const d of days) {
     const wd = (parseISODate(d).getDay() + 6) % 7; // 0 = пн
     const weekend = wd >= 5;
-    const isCurrentMonth = d.slice(0, 7) === currentMonth;
+    const recent = daysBetween(d, today) < 30;
 
     // Кофе в будни
     if (!weekend && rnd() < 0.75) {
@@ -149,8 +149,8 @@ export async function loadDemoData(today: ISODate): Promise<void> {
     if (!weekend && rnd() < 0.5) {
       txs.push(base({ type: "expense", amount: tiyn(200), date: d, accountId: kaspi, categoryId: cat("Транспорт"), note: "Проезд" }));
     }
-    // Доставка еды — в текущем месяце заметно чаще (для подсказки)
-    if (rnd() < (weekend ? 0.35 : 0.08) * (isCurrentMonth ? 2.5 : 1)) {
+    // Доставка еды — в последний месяц заметно чаще (для подсказки)
+    if (rnd() < (weekend ? 0.35 : 0.08) * (recent ? 2.5 : 1)) {
       txs.push(base({ type: "expense", amount: tiyn(roundTo(between(3500, 8500), 10)), date: d, accountId: kaspi, categoryId: cat("Доставка еды"), note: pick(["Wolt", "Glovo", "Яндекс Еда"]) }));
     }
     // Чек из магазина

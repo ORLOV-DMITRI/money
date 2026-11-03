@@ -70,11 +70,9 @@ export function goalStats(
     stats.overdue = !reached && daysLeft <= 0;
     if (!reached && daysLeft > 0) {
       const perDay = remaining / daysLeft;
-      stats.required = {
-        perDay: Math.ceil(perDay),
-        perWeek: Math.ceil(perDay * 7),
-        perMonth: Math.ceil(perDay * 30.44),
-      };
+      // округляем вверх до целых тенге
+      const up = (v: number) => Math.ceil(v / 100) * 100;
+      stats.required = { perDay: up(perDay), perWeek: up(perDay * 7), perMonth: up(perDay * 30.44) };
       stats.onTrack = stats.forecastDate != null && stats.forecastDate <= goal.deadline;
     }
   }

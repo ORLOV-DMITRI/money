@@ -53,7 +53,7 @@ export function budgetStatus(
     ratio,
     level: budgetLevel(ratio),
     forecast,
-    dailyAllowance: Math.max(0, Math.floor((b.limit - spent) / daysLeft)),
+    dailyAllowance: Math.max(0, Math.floor((b.limit - spent) / daysLeft / 100) * 100),
   };
   if (pace > 0 && spent < b.limit) {
     const date = addDaysISO(period.start, Math.ceil(b.limit / pace) - 1);

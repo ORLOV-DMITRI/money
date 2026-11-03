@@ -73,7 +73,7 @@ export function summarize(txs: Transaction[], period: Period, today?: ISODate): 
   // Для текущего периода делим на прошедшие дни, а не на всю длину
   let days = periodLength(period);
   if (today && inPeriod(today, period)) days = eachDay(period.start, today).length;
-  return { income, expense, net: income - expense, saved, avgDailyExpense: days ? Math.round(expense / days) : 0, count };
+  return { income, expense, net: income - expense, saved, avgDailyExpense: days ? Math.round(expense / days / 100) * 100 : 0, count };
 }
 
 export interface CategoryShare {
@@ -218,5 +218,5 @@ export function weekdayAverages(txs: Transaction[], period: Period): number[] {
     if (tx.type !== "expense" || !inPeriod(tx.date, period)) continue;
     sums[(parseISODate(tx.date).getDay() + 6) % 7] += tx.amount;
   }
-  return sums.map((s, i) => (counts[i] ? Math.round(s / counts[i]) : 0));
+  return sums.map((s, i) => (counts[i] ? Math.round(s / counts[i] / 100) * 100 : 0));
 }

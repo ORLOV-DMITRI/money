@@ -1,4 +1,4 @@
-import { addDaysISO, daysBetween, formatDate, getPeriod, parseISODate, toISODate, type ISODate } from "@/lib/dates";
+import { addDaysISO, formatDate, getPeriod, parseISODate, toISODate, type ISODate } from "@/lib/dates";
 import { formatMoney, formatPercent, percentChange } from "@/lib/money";
 import type { Budget, Category, Goal, Product, PurchaseItem, Transaction } from "@/lib/db/schema";
 import { budgetStatus } from "./budgets";
@@ -32,6 +32,7 @@ export interface InsightInput {
 const WEEKDAYS = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"];
 /** Минимальная сумма, чтобы сравнение категорий было осмысленным: 5 000 ₸ */
 const MIN_CATEGORY_BASE = 5_000_00;
+const WINDOW = 30;
 
 export function buildInsights(input: InsightInput): Insight[] {
   const { today, txs, items, categories, products, budgets, goals } = input;
@@ -39,19 +40,15 @@ export function buildInsights(input: InsightInput): Insight[] {
   const catById = new Map(categories.map((c) => [c.id!, c]));
   const entries = expenseEntries(txs, items);
 
-  // 1. Категории: месяц-к-месяцу на одинаковом отрезке (1..сегодняшнее число)
-  const month = getPeriod("month", today);
-  const mtd = { type: "custom" as const, start: month.start, end: today };
-  const prevStart = toISODate(subMonths(parseISODate(month.start), 1));
-  const dayOfMonth = daysBetween(month.start, today);
-  const prevEndCandidate = addDaysISO(prevStart, dayOfMonth);
-  const prevEnd = prevEndCandidate >= month.start ? addDaysISO(month.start, -1) : prevEndCandidate;
-  const prev = { type: "custom" as const, start: prevStart, end: prevEnd };
-  const cur = new Map(byCategory(entries, mtd).map((c) => [c.categoryId, c.amount]));
-  const old = byCategory(entries, prev);
+  // 1. Категории: последние 30 дней против предыдущих 30 — честно в любой день месяца
+  const cur30 = { type: "custom" as const, start: addDaysISO(today, -(WINDOW - 1)), end: today };
+  const prev30 = { type: "custom" as const, start: addDaysISO(today, -(2 * WINDOW - 1)), end: addDaysISO(today, -WINDOW) };
+  const cur = new Map(byCategory(entries, cur30).map((c) => [c.categoryId, c.amount]));
+  const old = byCategory(entries, prev30);
   const changes = old
     .filter((c) => c.categoryId != null && c.amount >= MIN_CATEGORY_BASE)
     .map((c) => ({ id: c.categoryId!, from: c.amount, to: cur.get(c.categoryId) ?? 0 }))
+    .filter((c) => c.to > 0)
     .map((c) => ({ ...c, pct: percentChange(c.from, c.to) ?? 0 }))
     .filter((c) => Math.abs(c.pct) >= 25)
     .sort((a, b) => Math.abs(b.to - b.from) - Math.abs(a.to - a.from))
@@ -63,26 +60,26 @@ export function buildInsights(input: InsightInput): Insight[] {
     out.push({
       id: `cat-${c.id}`,
       icon: cat.icon,
-      text: `На «${cat.name}» в этом месяце ушло на ${formatPercent(Math.abs(c.pct))} ${more ? "больше" : "меньше"}, чем за то же время в прошлом (${formatMoney(c.to)} против ${formatMoney(c.from)})`,
+      text: `На «${cat.name}» за последние 30 дней ушло на ${formatPercent(Math.abs(c.pct))} ${more ? "больше" : "меньше"}, чем за предыдущие: ${formatMoney(c.to)} против ${formatMoney(c.from)}`,
       tone: more ? "bad" : "good",
       href: `/transactions/?category=${c.id}`,
       weight: 60 + Math.min(30, Math.abs(c.pct) / 5),
     });
   }
 
-  // 2. Общий темп расходов месяца
+  // 2. Общий темп расходов
   let curTotal = 0;
   let prevTotal = 0;
   for (const e of entries) {
-    if (e.date >= mtd.start && e.date <= mtd.end) curTotal += e.amount;
-    if (e.date >= prev.start && e.date <= prev.end) prevTotal += e.amount;
+    if (e.date >= cur30.start && e.date <= cur30.end) curTotal += e.amount;
+    if (e.date >= prev30.start && e.date <= prev30.end) prevTotal += e.amount;
   }
   const pace = percentChange(prevTotal, curTotal);
   if (pace != null && prevTotal >= MIN_CATEGORY_BASE * 4 && Math.abs(pace) >= 10) {
     out.push({
       id: "pace",
       icon: pace > 0 ? "📈" : "📉",
-      text: `С начала месяца ты тратишь на ${formatPercent(Math.abs(pace))} ${pace > 0 ? "больше" : "меньше"}, чем в прошлом месяце к этому числу`,
+      text: `За последние 30 дней ты потратил(а) на ${formatPercent(Math.abs(pace))} ${pace > 0 ? "больше" : "меньше"}, чем за предыдущие 30`,
       tone: pace > 0 ? "bad" : "good",
       href: "/reports/",
       weight: 55,
@@ -109,7 +106,7 @@ export function buildInsights(input: InsightInput): Insight[] {
     out.push({
       id: `price-${c.p.id}`,
       icon: c.pct > 0 ? "🏷️" : "🎉",
-      text: `${c.p.name} ${c.pct > 0 ? "подорожал(о)" : "подешевел(о)"} на ${formatPercent(Math.abs(c.pct))} ${c.six ? "за полгода" : "с первой покупки"}`,
+      text: `Цена на «${c.p.name}» ${c.pct > 0 ? "выросла" : "снизилась"} на ${formatPercent(Math.abs(c.pct))} ${c.six ? "за полгода" : "с первой покупки"}`,
       tone: c.pct > 0 ? "bad" : "good",
       href: `/products/view/?id=${c.p.id}`,
       weight: 50 + Math.min(20, Math.abs(c.pct) / 2),
@@ -143,7 +140,7 @@ export function buildInsights(input: InsightInput): Insight[] {
   }
 
   // 5. Доля сбережений за последние 3 полных месяца + текущий
-  const from3 = toISODate(subMonths(parseISODate(month.start), 3));
+  const from3 = toISODate(subMonths(parseISODate(getPeriod("month", today).start), 3));
   let income = 0;
   let saved = 0;
   for (const tx of txs) {
