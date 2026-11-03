@@ -4,7 +4,7 @@
 
 | Слой | Технология | Зачем |
 | --- | --- | --- |
-| Фреймворк | Next.js 16 (App Router) + React 19 + TypeScript | Знакомый стек, роутинг, сборка, статический экспорт |
+| Фреймворк | Next.js 16.4 (App Router, Turbopack) + React 19 + TypeScript | Знакомый стек, роутинг, сборка, статический экспорт |
 | Стили | Tailwind CSS v4 | Быстро, единая дизайн-система через CSS-переменные |
 | UI-компоненты | Собственные компоненты в стиле shadcn/ui поверх Radix UI | Доступность (a11y) из коробки, полный контроль над кодом |
 | Хранилище | IndexedDB через Dexie 4 + `dexie-react-hooks` (`useLiveQuery`) | Локальные данные, реактивные запросы, работа офлайн |
@@ -13,6 +13,7 @@
 | Тосты | sonner | Уведомления с кнопкой «Отменить» |
 | Иконки | lucide-react | Иконки интерфейса (категории — эмодзи) |
 | Тесты | Vitest + fake-indexeddb | Юнит-тесты логики: деньги, парсер, отчёты, копилки |
+| PWA | Свой service worker (`public/sw.js`) + манифест | Установка на телефон и офлайн без лишних зависимостей |
 
 Приложение полностью клиентское: `output: 'export'` → набор статических файлов, деплоится куда угодно (Vercel, GitHub Pages, Netlify).
 
@@ -20,32 +21,31 @@
 
 ```
 src/
-  app/                    # маршруты Next.js (тонкие страницы, только композиция)
-    page.tsx              # Главная
-    transactions/         # Операции
-    goals/                # Копилки (детали: /goals/view?id=…)
-    reports/              # Отчёты
-    products/             # Продукты (детали: /products/view?id=…)
-    budgets/              # Бюджеты
-    recurring/            # Регулярные платежи
-    settings/             # Настройки, счета, категории, данные
+  app/                      # маршруты: тонкие page.tsx (metadata + view)
+    page.tsx                # Главная
+    transactions/ reports/ goals/ goals/view/ products/ products/view/
+    budgets/ recurring/ accounts/ categories/ settings/
   components/
-    ui/                   # базовые компоненты (button, dialog, sheet, input…)
-    layout/               # навигация, оболочка
-    transactions/ goals/ reports/ …  # компоненты фич
+    ui/                     # button, input, dialog (шторка на телефоне), dropdown, misc, money, amount-input, pickers
+    layout/                 # app-shell (навигация), providers, theme, bootstrap, nav
+    transactions/           # tx-editor (расход/приход/перевод/чек/копилка), tx-list, quick-input-bar, category-grid
+    charts/                 # series-chart, category-bars, heatmap, period-picker
+    goals/ budgets/ insights/
+    views/                  # экраны целиком: dashboard, transactions, reports, goals, goal-detail, …
+  hooks/
+    use-data.ts             # реактивные запросы к Dexie (useLiveQuery)
+    use-analytics.ts        # мемоизированные расчёты: копилки, бюджеты, подсказки
+    use-product-stats.ts
   lib/
-    money.ts              # тиыны ↔ тенге, форматирование, парсинг ввода суммы
-    dates.ts              # периоды, навигация по периодам
-    quick-input.ts        # парсер быстрого ввода
-    db/
-      schema.ts           # типы сущностей
-      db.ts               # Dexie, версии схемы
-      seed.ts             # стартовые категории, демо-данные
-    services/             # бизнес-логика, работающая с БД (транзакции, копилки, регулярные…)
-    analytics/            # чистые функции: балансы, отчёты, прогнозы, инсайты
-  hooks/                  # React-хуки поверх useLiveQuery
+    money.ts dates.ts       # тиыны, формат, парсер выражений; периоды и склонения
+    quick-input.ts          # парсер быстрого ввода
+    categorize.ts           # подбор категории
+    db/                     # schema, db (Dexie), seed, demo
+    services/               # transactions, goals, recurring, catalog, data (бэкап/CSV)
+    analytics/              # чистые функции: balances, reports, goals, budgets, products, insights
+  test/setup.ts             # fake-indexeddb для тестов сервисов
+public/                     # manifest.webmanifest, sw.js, иконки
 ```
-
 Правило: **вся логика расчётов — чистые функции в `lib/analytics`** (принимают массивы, возвращают результат) и покрыты тестами. Компоненты только отображают.
 
 ## Модель данных
@@ -74,8 +74,8 @@ Transaction  { id, type: 'expense'|'income'|'transfer'|'goal_deposit'|'goal_with
 PurchaseItem { id, transactionId, productId, categoryId, storeId?,
                quantity, unit, unitPrice, total, date }   // date дублируется для индексов
 
-Product      { id, name, unit, categoryId, createdAt }
-Store        { id, name }
+Product      { id, name, key, unit, categoryId, createdAt }   // key — нормализованное имя (нижний регистр, ё→е)
+Store        { id, name, key }
 
 Goal         { id, name, icon, color, target, deadline?, autoPercent,
                autoAccountId?, archived, completedAt?, createdAt }
@@ -117,4 +117,17 @@ settings:      &key
 
 **Приход с автоотчислениями.** В одной Dexie-транзакции: создаётся приход, затем для каждой копилки с `autoPercent > 0` — `goal_deposit` с `parentId = id прихода`. Удаление прихода удаляет дочерние отчисления.
 
-**Регулярные платежи.** При старте приложения `processRecurring(today)`: для `mode='auto'` создаются все операции с `nextDate ≤ today` и `nextDate` сдвигается; для `mode='remind'` просроченные показываются на главной.
+**Темп копилки.** Чистые пополнения за 3 последних полных календарных месяца (или с даты создания, если копилка моложе), делённые на число дней. Так ежемесячный взнос не «выпадает» из окна из-за одного дня. Прогноз = остаток / темп.
+
+**Бюджеты.** Траты категории за текущий месяц/неделю по разложенным расходам (чеки по позициям). Прогноз = темп × длина периода; дата исчерпания — когда при текущем темпе будет достигнут лимит. Предупреждения при пересечении 80% и 100%.
+
+**Подсказки.** `buildInsights` — чистая функция: сравнение категорий за последние 30 дней против предыдущих 30, общий темп, рост цен продуктов, бюджеты, доля сбережений, дорогой день недели, состояние копилок. Каждая подсказка имеет вес для сортировки и ссылку.
+
+**Регулярные платежи.** При старте приложения `processRecurring(today)` в одной rw-транзакции (без дублей при параллельных вызовах): для `mode='auto'` создаются все операции с `nextDate ≤ today` и `nextDate` сдвигается; для `mode='remind'` просроченные показываются на главной.
+
+## Офлайн (service worker)
+
+- `/_next/static/*`, иконки, манифест — cache-first (имена с хешем, кеш вечный).
+- Навигация — network-first: свежая страница кладётся в кеш, без сети отдаётся кешированная (или главная).
+- При установке заранее кешируются все страницы приложения.
+- В dev-режиме SW не регистрируется.

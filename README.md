@@ -1,36 +1,45 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Деньги — учёт расходов в тенге
 
-## Getting Started
+Личный учёт финансов в казахстанских тенге: расходы по категориям и по конкретным продуктам, приходы, копилки с прогнозами, бюджеты, регулярные платежи и отчёты по дням, неделям, месяцам и годам. Работает в браузере и на телефоне (PWA), офлайн, данные хранятся только на устройстве.
 
-First, run the development server:
+## Возможности
+
+- **Баланс**: всего денег, свободно на счетах, в копилках; результат месяца.
+- **Счета**: наличные, карты, депозиты; переводы между ними.
+- **Расходы и приходы** с категориями, тегами, заметками; редактирование и удаление с отменой.
+- **Чеки по продуктам**: магазин, позиции «количество × цена»; история цен, личная инфляция, где дешевле.
+- **Быстрый ввод**: `кофе 1200`, `+350000 зарплата`, `такси 2 500 вчера #работа`, `молоко 2x650 magnum`.
+- **Копилки**: цель, срок, «откладывай N в неделю», прогноз по темпу, автоотчисление % с каждого прихода.
+- **Бюджеты** по категориям с прогнозом и предупреждениями на 80% и 100%.
+- **Регулярные платежи**: автоматически или с напоминанием на главной.
+- **Отчёты**: сравнение с прошлым периодом, структура расходов, динамика, календарь трат, дни недели, топ продуктов и магазинов, теги.
+- **Подсказки**: «на доставку ушло на 60% больше», «цена молока выросла на 21%», «бюджет закончится 14-го».
+- **Данные**: резервная копия JSON, CSV для Excel, демо-данные, светлая/тёмная тема.
+
+## Запуск
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+На пустом приложении нажми «Посмотреть на примере» — загрузятся демо-данные за 4 месяца.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Команды
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm test           # юнит-тесты (Vitest)
+npm run lint       # ESLint
+npm run typecheck  # TypeScript
+npm run build      # статический экспорт в out/
+```
 
-## Learn More
+## Деплой
 
-To learn more about Next.js, take a look at the following resources:
+`npm run build` собирает статический сайт в `out/`. Его можно положить на Vercel, Netlify, GitHub Pages или любой статический хостинг.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Документация
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Спецификация, архитектура, журнал решений и план лежат в [`docs/`](./docs/README.md).
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Стек: Next.js 16, React 19, TypeScript, Tailwind CSS 4, Radix UI, Dexie (IndexedDB), Recharts, date-fns, Vitest.
