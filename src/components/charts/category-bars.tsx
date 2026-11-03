@@ -1,11 +1,13 @@
 "use client";
 
+import type { Id } from "@/lib/ids";
 import Link from "next/link";
 import type { Category } from "@/lib/db/schema";
 import type { CategoryShare } from "@/lib/analytics/reports";
 import { formatMoney } from "@/lib/money";
 
 const MAX_ROWS = 8;
+const OTHER = "__other__";
 
 /** Ранжированные полосы: цвет — у категории (сущности), подпись и сумма — всегда текстом */
 export function CategoryBars({
@@ -14,22 +16,22 @@ export function CategoryBars({
   hrefFor,
 }: {
   shares: CategoryShare[];
-  categories: Map<number, Category>;
-  hrefFor?: (categoryId: number | undefined) => string;
+  categories: Map<Id, Category>;
+  hrefFor?: (categoryId: Id | undefined) => string;
 }) {
   let rows = shares;
   if (shares.length > MAX_ROWS) {
     const rest = shares.slice(MAX_ROWS - 1);
     rows = [
       ...shares.slice(0, MAX_ROWS - 1),
-      { categoryId: -1, amount: rest.reduce((s, r) => s + r.amount, 0), share: rest.reduce((s, r) => s + r.share, 0) },
+      { categoryId: OTHER, amount: rest.reduce((s, r) => s + r.amount, 0), share: rest.reduce((s, r) => s + r.share, 0) },
     ];
   }
   const max = Math.max(...rows.map((r) => r.amount), 1);
   return (
     <ul className="grid gap-3">
       {rows.map((r) => {
-        const other = r.categoryId === -1;
+        const other = r.categoryId === OTHER;
         const c = r.categoryId != null && !other ? categories.get(r.categoryId) : undefined;
         const name = other ? `Остальное (${shares.length - MAX_ROWS + 1})` : (c?.name ?? "Без категории");
         const body = (

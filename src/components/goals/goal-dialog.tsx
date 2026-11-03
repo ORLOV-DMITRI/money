@@ -10,7 +10,7 @@ import { ColorPicker, EmojiPicker } from "@/components/ui/pickers";
 import { db } from "@/lib/db/db";
 import type { Goal } from "@/lib/db/schema";
 
-export function GoalDialog({ goal, onDone }: { goal?: Goal; onDone: (id?: number) => void }) {
+export function GoalDialog({ goal, onDone }: { goal?: Goal; onDone: (id?: string) => void }) {
   const [name, setName] = useState(goal?.name ?? "");
   const [icon, setIcon] = useState(goal?.icon ?? "🎯");
   const [color, setColor] = useState(goal?.color ?? "#0ea5e9");

@@ -23,7 +23,7 @@ import { completeGoal, deleteGoal, reopenGoal } from "@/lib/services/goals";
 import { cn } from "@/lib/utils";
 
 export function GoalDetailView() {
-  const id = Number(useSearchParams().get("id"));
+  const id = useSearchParams().get("id") ?? "";
   const goals = useGoals();
   const txs = useTransactions();
   const lookups = useLookups();

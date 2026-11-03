@@ -1,5 +1,6 @@
 "use client";
 
+import type { Id } from "@/lib/ids";
 import { useMemo } from "react";
 import { productStats, type ProductStats } from "@/lib/analytics/products";
 import type { Product, PurchaseItem } from "@/lib/db/schema";
@@ -11,7 +12,7 @@ export function useProductStats(): { product: Product; stats: ProductStats; item
   const today = useToday();
   return useMemo(() => {
     if (!products || !items) return undefined;
-    const by = new Map<number, PurchaseItem[]>();
+    const by = new Map<Id, PurchaseItem[]>();
     for (const it of items) {
       const l = by.get(it.productId);
       if (l) l.push(it);

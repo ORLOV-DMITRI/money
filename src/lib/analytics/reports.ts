@@ -1,3 +1,4 @@
+import type { Id } from "@/lib/ids";
 import { addMonths, format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { eachDay, inPeriod, parseISODate, periodLength, toISODate, type ISODate, type Period } from "@/lib/dates";
@@ -5,14 +6,14 @@ import type { PurchaseItem, Transaction } from "@/lib/db/schema";
 
 /** Расход, разложенный по категории: одна запись на позицию чека или на всю операцию */
 export interface ExpenseEntry {
-  txId: number;
+  txId: Id;
   date: ISODate;
-  categoryId: number | undefined;
+  categoryId: Id | undefined;
   amount: number;
 }
 
-export function groupItemsByTx<T extends Pick<PurchaseItem, "transactionId">>(items: T[]): Map<number, T[]> {
-  const map = new Map<number, T[]>();
+export function groupItemsByTx<T extends Pick<PurchaseItem, "transactionId">>(items: T[]): Map<Id, T[]> {
+  const map = new Map<Id, T[]>();
   for (const it of items) {
     const list = map.get(it.transactionId);
     if (list) list.push(it);
@@ -82,13 +83,13 @@ export function summarize(txs: Transaction[], period: Period, today?: ISODate): 
 }
 
 export interface CategoryShare {
-  categoryId: number | undefined;
+  categoryId: Id | undefined;
   amount: number;
   share: number;
 }
 
 export function byCategory(entries: ExpenseEntry[], period: Period): CategoryShare[] {
-  const map = new Map<number | undefined, number>();
+  const map = new Map<Id | undefined, number>();
   let total = 0;
   for (const e of entries) {
     if (!inPeriod(e.date, period)) continue;
@@ -102,7 +103,7 @@ export function byCategory(entries: ExpenseEntry[], period: Period): CategorySha
 }
 
 export function incomeByCategory(txs: Transaction[], period: Period): CategoryShare[] {
-  const map = new Map<number | undefined, number>();
+  const map = new Map<Id | undefined, number>();
   let total = 0;
   for (const tx of txs) {
     if (tx.type !== "income" || !inPeriod(tx.date, period)) continue;
@@ -176,8 +177,8 @@ export function topProducts(
   items: Pick<PurchaseItem, "productId" | "total" | "date">[],
   period: Period,
   limit = 10,
-): TopItem<number>[] {
-  const map = new Map<number, TopItem<number>>();
+): TopItem<Id>[] {
+  const map = new Map<Id, TopItem<Id>>();
   for (const it of items) {
     if (!inPeriod(it.date, period)) continue;
     const t = map.get(it.productId) ?? { id: it.productId, amount: 0, count: 0 };
@@ -188,8 +189,8 @@ export function topProducts(
   return [...map.values()].sort((a, b) => b.amount - a.amount).slice(0, limit);
 }
 
-export function topStores(txs: Transaction[], period: Period, limit = 10): TopItem<number>[] {
-  const map = new Map<number, TopItem<number>>();
+export function topStores(txs: Transaction[], period: Period, limit = 10): TopItem<Id>[] {
+  const map = new Map<Id, TopItem<Id>>();
   for (const tx of txs) {
     if (tx.type !== "expense" || tx.storeId == null || !inPeriod(tx.date, period)) continue;
     const t = map.get(tx.storeId) ?? { id: tx.storeId, amount: 0, count: 0 };

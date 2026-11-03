@@ -1,5 +1,6 @@
 "use client";
 
+import type { Id } from "@/lib/ids";
 import { Plus, Trash2, X } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
@@ -32,8 +33,8 @@ export type EditorMode = "expense" | "income" | "receipt" | "goal" | "adjustment
 
 export interface EditorRequest {
   mode?: EditorMode;
-  txId?: number;
-  goalId?: number;
+  txId?: Id;
+  goalId?: Id;
   goalDirection?: "deposit" | "withdraw";
   preset?: Partial<Pick<Transaction, "amount" | "categoryId" | "note" | "date">>;
 }
@@ -149,7 +150,7 @@ function parseTags(s: string): string[] {
     .filter(Boolean);
 }
 
-async function warnBudget(categoryId: number | undefined, amount: number, date: string, categories: Category[]) {
+async function warnBudget(categoryId: Id | undefined, amount: number, date: string, categories: Category[]) {
   if (categoryId == null) return;
   const budgets = await db.budgets.where("categoryId").equals(categoryId).toArray();
   for (const b of budgets) {
@@ -172,7 +173,7 @@ function SimpleForm({ kind, tx, req, onDone }: { kind: "expense" | "income"; tx?
   const p = req.preset ?? {};
 
   const [amount, setAmount] = React.useState<number | null>(tx?.amount ?? p.amount ?? null);
-  const [categoryId, setCategoryId] = React.useState<number | undefined>(tx?.categoryId ?? p.categoryId);
+  const [categoryId, setCategoryId] = React.useState<Id | undefined>(tx?.categoryId ?? p.categoryId);
   const [categoryTouched, setCategoryTouched] = React.useState(tx != null || p.categoryId != null);
   const [date, setDate] = React.useState(tx?.date ?? p.date ?? todayISO());
   const [note, setNote] = React.useState(tx?.note ?? p.note ?? "");
@@ -284,7 +285,7 @@ function GoalForm({ tx, req, onDone }: { tx?: Transaction; req: EditorRequest; o
   const goals = useGoals();
   const balances = useBalances();
   const [direction, setDirection] = React.useState<"deposit" | "withdraw">(tx ? (tx.type === "goal_withdraw" ? "withdraw" : "deposit") : (req.goalDirection ?? "deposit"));
-  const [goalId, setGoalId] = React.useState<number | undefined>(tx?.goalId ?? req.goalId);
+  const [goalId, setGoalId] = React.useState<Id | undefined>(tx?.goalId ?? req.goalId);
   const [amount, setAmount] = React.useState<number | null>(tx?.amount ?? null);
   const [date, setDate] = React.useState(tx?.date ?? todayISO());
   const [note, setNote] = React.useState(tx?.note ?? "");
@@ -322,7 +323,7 @@ function GoalForm({ tx, req, onDone }: { tx?: Transaction; req: EditorRequest; o
       />
       <AmountInput value={amount} onChange={setAmount} size="lg" autoFocus={!tx} ariaLabel="Сумма" />
       <Field label="Копилка" hint={`Сейчас в копилке ${formatMoney(goalBalance)}`}>
-        <NativeSelect value={gid ?? ""} onChange={(e) => setGoalId(Number(e.target.value))}>
+        <NativeSelect value={gid ?? ""} onChange={(e) => setGoalId(e.target.value)}>
           {active.map((g) => (
             <option key={g.id} value={g.id}>
               {g.icon} {g.name}
@@ -357,7 +358,7 @@ interface ItemRow {
   unit: Unit;
   unitPrice: number | null;
   total: number | null;
-  categoryId: number | undefined;
+  categoryId: Id | undefined;
 }
 
 let rowSeq = 1;
@@ -506,7 +507,7 @@ function ReceiptForm({ tx, onDone }: { tx?: Transaction; onDone: () => void }) {
               <NativeSelect
                 aria-label="Категория позиции"
                 value={r.categoryId ?? defaultCategory ?? ""}
-                onChange={(e) => update(r.key, { categoryId: Number(e.target.value) })}
+                onChange={(e) => update(r.key, { categoryId: e.target.value })}
                 className="w-14 shrink-0 [&_select]:px-2 [&_select]:pr-6 [&_svg]:right-1.5"
               >
                 {categories

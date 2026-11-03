@@ -1,3 +1,4 @@
+import type { Id } from "@/lib/ids";
 import { addDaysISO, formatDate, getPeriod, parseISODate, toISODate, type ISODate } from "@/lib/dates";
 import { formatMoney, formatPercent, percentChange } from "@/lib/money";
 import type { Budget, Category, Goal, Product, PurchaseItem, Transaction } from "@/lib/db/schema";
@@ -87,7 +88,7 @@ export function buildInsights(input: InsightInput): Insight[] {
   }
 
   // 3. Личная инфляция по продуктам
-  const itemsByProduct = new Map<number, PurchaseItem[]>();
+  const itemsByProduct = new Map<Id, PurchaseItem[]>();
   for (const it of items) {
     const l = itemsByProduct.get(it.productId);
     if (l) l.push(it);

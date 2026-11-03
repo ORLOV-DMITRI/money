@@ -6,6 +6,7 @@ import { TxEditorProvider } from "@/components/transactions/tx-editor";
 import { ThemeProvider, useTheme } from "./theme";
 import { Bootstrap } from "./bootstrap";
 import { AppShell } from "./app-shell";
+import { AuthGate } from "@/components/sync/auth-gate";
 
 function ThemedToaster() {
   const { theme } = useTheme();
@@ -18,7 +19,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ConfirmProvider>
         <TxEditorProvider>
           <Bootstrap />
-          <AppShell>{children}</AppShell>
+          <AuthGate>
+            <AppShell>{children}</AppShell>
+          </AuthGate>
           <ThemedToaster />
         </TxEditorProvider>
       </ConfirmProvider>

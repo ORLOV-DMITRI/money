@@ -1,5 +1,6 @@
 "use client";
 
+import type { Id } from "@/lib/ids";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/layout/app-shell";
@@ -64,7 +65,7 @@ export function ReportsView() {
     };
   }, [txs, items, period, today]);
 
-  const link = (categoryId: number | undefined) => `/transactions/?category=${categoryId ?? ""}&period=custom&from=${period.start}&to=${period.end}`;
+  const link = (categoryId: Id | undefined) => `/transactions/?category=${categoryId ?? ""}&period=custom&from=${period.start}&to=${period.end}`;
 
   return (
     <>

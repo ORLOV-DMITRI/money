@@ -1,24 +1,27 @@
 import { db } from "@/lib/db/db";
-import type { PurchaseItem, Transaction, TransactionType, Unit } from "@/lib/db/schema";
+import type { Id, PurchaseItem, Transaction, TransactionType, Unit } from "@/lib/db/schema";
+import { detId } from "@/lib/ids";
 import { autoDeposits } from "@/lib/analytics/goals";
 import { getOrCreateProduct, getOrCreateStore } from "./catalog";
 import type { ISODate } from "@/lib/dates";
 
 export interface TxInput {
+  /** задать id явно (детерминированные id регулярных платежей) */
+  id?: Id;
   type: TransactionType;
   amount: number;
   date: ISODate;
-  categoryId?: number;
-  goalId?: number;
-  storeId?: number;
+  categoryId?: Id;
+  goalId?: Id;
+  storeId?: Id;
   note?: string;
   tags?: string[];
-  recurringId?: number;
+  recurringId?: Id;
 }
 
 export interface ReceiptItemInput {
   productName: string;
-  categoryId: number;
+  categoryId: Id;
   quantity: number;
   unit: Unit;
   unitPrice: number;
@@ -69,22 +72,26 @@ function validate(input: TxInput) {
 }
 
 export interface AddResult {
-  id: number;
+  id: Id;
   /** автоотчисления в копилки, созданные приходом */
-  autoDeposits: { goalId: number; amount: number }[];
+  autoDeposits: { goalId: Id; amount: number }[];
 }
 
 /** Создаёт операцию. Для прихода — сразу и автоотчисления в копилки. */
 export async function addTransaction(input: TxInput, opts: { skipAuto?: boolean } = {}): Promise<AddResult> {
   validate(input);
   return db.transaction("rw", db.transactions, db.goals, async () => {
-    const id = await db.transactions.add(build(input));
+    // с явным id — put: повторное создание того же регулярного платежа идемпотентно
+    const id = input.id ? await db.transactions.put({ ...build(input), id: input.id }) : await db.transactions.add(build(input));
     let deposits: AddResult["autoDeposits"] = [];
     if (input.type === "income" && !opts.skipAuto) {
       deposits = autoDeposits(input.amount, await db.goals.toArray());
       for (const d of deposits) {
-        await db.transactions.add({
+        // id детерминирован: если тот же приход (например, регулярная зарплата) создан на двух устройствах,
+        // отчисления тоже совпадут, а не задвоятся
+        await db.transactions.put({
           ...build({ type: "goal_deposit", amount: d.amount, date: input.date, goalId: d.goalId, note: "Автоотчисление" }),
+          id: detId("auto", id, d.goalId),
           parentId: id,
         });
       }
@@ -93,7 +100,7 @@ export async function addTransaction(input: TxInput, opts: { skipAuto?: boolean 
   });
 }
 
-export async function updateTransaction(id: number, input: TxInput): Promise<void> {
+export async function updateTransaction(id: Id, input: TxInput): Promise<void> {
   validate(input);
   await db.transaction("rw", db.transactions, async () => {
     const old = await db.transactions.get(id);
@@ -107,7 +114,7 @@ export async function updateTransaction(id: number, input: TxInput): Promise<voi
   });
 }
 
-export async function addReceipt(input: ReceiptInput): Promise<number> {
+export async function addReceipt(input: ReceiptInput): Promise<Id> {
   if (!input.items.length) throw new Error("Добавь хотя бы одну позицию");
   const total = input.items.reduce((s, i) => s + i.total, 0);
   if (!(total > 0)) throw new Error("Сумма чека должна быть больше нуля");
@@ -122,7 +129,7 @@ export async function addReceipt(input: ReceiptInput): Promise<number> {
   });
 }
 
-export async function updateReceipt(txId: number, input: ReceiptInput): Promise<void> {
+export async function updateReceipt(txId: Id, input: ReceiptInput): Promise<void> {
   if (!input.items.length) throw new Error("Добавь хотя бы одну позицию");
   const total = input.items.reduce((s, i) => s + i.total, 0);
   await db.transaction("rw", [db.transactions, db.purchaseItems, db.products, db.stores], async () => {
@@ -139,13 +146,13 @@ export async function updateReceipt(txId: number, input: ReceiptInput): Promise<
   });
 }
 
-function mostExpensiveCategory(items: ReceiptItemInput[]): number {
-  const sums = new Map<number, number>();
+function mostExpensiveCategory(items: ReceiptItemInput[]): Id {
+  const sums = new Map<Id, number>();
   for (const i of items) sums.set(i.categoryId, (sums.get(i.categoryId) ?? 0) + i.total);
   return [...sums.entries()].sort((a, b) => b[1] - a[1])[0][0];
 }
 
-async function writeItems(txId: number, input: ReceiptInput, storeId: number | undefined) {
+async function writeItems(txId: Id, input: ReceiptInput, storeId: Id | undefined) {
   for (const it of input.items) {
     const productId = await getOrCreateProduct(it.productName, it.unit, it.categoryId);
     await db.purchaseItems.add({
@@ -163,13 +170,13 @@ async function writeItems(txId: number, input: ReceiptInput, storeId: number | u
 }
 
 /** Удаляет операцию вместе с позициями чека и автоотчислениями. Возвращает снимок для отмены. */
-export async function deleteTransaction(id: number): Promise<TxSnapshot> {
+export async function deleteTransaction(id: Id): Promise<TxSnapshot> {
   return db.transaction("rw", db.transactions, db.purchaseItems, async () => {
     const tx = await db.transactions.get(id);
     if (!tx) return { transactions: [], items: [] };
     const children = await db.transactions.where("parentId").equals(id).toArray();
     const items = await db.purchaseItems.where("transactionId").equals(id).toArray();
-    await db.transactions.bulkDelete([id, ...children.map((c) => c.id!)]);
+    await db.transactions.bulkDelete([id, ...children.map((c) => c.id)]);
     await db.purchaseItems.where("transactionId").equals(id).delete();
     return { transactions: [tx, ...children], items };
   });

@@ -1,3 +1,4 @@
+import type { Id } from "@/lib/ids";
 import { subMonths } from "date-fns";
 import { addDaysISO, daysBetween, getPeriod, parseISODate, toISODate, type ISODate } from "@/lib/dates";
 import type { Goal, Transaction } from "@/lib/db/schema";
@@ -89,8 +90,8 @@ export function goalStats(
 export function autoDeposits(
   income: number,
   goals: Pick<Goal, "id" | "autoPercent" | "archived" | "completedAt">[],
-): { goalId: number; amount: number }[] {
-  const out: { goalId: number; amount: number }[] = [];
+): { goalId: Id; amount: number }[] {
+  const out: { goalId: Id; amount: number }[] = [];
   let left = income;
   for (const g of goals) {
     if (g.id == null || g.archived || g.completedAt || g.autoPercent <= 0) continue;

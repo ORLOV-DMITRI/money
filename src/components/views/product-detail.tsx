@@ -21,7 +21,7 @@ import { useTxEditor } from "@/components/transactions/tx-editor";
 import { PriceChange } from "./products";
 
 export function ProductDetailView() {
-  const id = Number(useSearchParams().get("id"));
+  const id = useSearchParams().get("id") ?? "";
   const list = useProductStats();
   const lookups = useLookups();
   const openEditor = useTxEditor();
@@ -251,7 +251,7 @@ function ProductDialog({ product, onDone }: { product: Product; onDone: () => vo
             </NativeSelect>
           </Field>
           <Field label="Категория">
-            <NativeSelect value={categoryId} onChange={(e) => setCategoryId(Number(e.target.value))}>
+            <NativeSelect value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
               {categories
                 .filter((c) => c.kind === "expense")
                 .map((c) => (

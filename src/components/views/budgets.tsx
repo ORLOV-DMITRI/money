@@ -1,5 +1,6 @@
 "use client";
 
+import type { Id } from "@/lib/ids";
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -63,7 +64,7 @@ function BudgetDialog({ budget, onDone }: { budget?: Budget; onDone: () => void 
   const budgets = useBudgets() ?? [];
   const confirm = useConfirm();
   const used = new Set(budgets.filter((b) => b.id !== budget?.id).map((b) => `${b.categoryId}:${b.period}`));
-  const [categoryId, setCategoryId] = useState<number | undefined>(budget?.categoryId);
+  const [categoryId, setCategoryId] = useState<Id | undefined>(budget?.categoryId);
   const [limit, setLimit] = useState<number | null>(budget?.limit ?? null);
   const [period, setPeriod] = useState<BudgetPeriod>(budget?.period ?? "month");
   const cat = categoryId ?? categories.find((c) => !used.has(`${c.id}:${period}`))?.id;
@@ -82,7 +83,7 @@ function BudgetDialog({ budget, onDone }: { budget?: Budget; onDone: () => void 
     <DialogContent title={budget ? "Бюджет" : "Новый бюджет"} size="sm">
       <form onSubmit={save} className="grid gap-4">
         <Field label="Категория">
-          <NativeSelect value={cat ?? ""} onChange={(e) => setCategoryId(Number(e.target.value))}>
+          <NativeSelect value={cat ?? ""} onChange={(e) => setCategoryId(e.target.value)}>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.icon} {c.name}

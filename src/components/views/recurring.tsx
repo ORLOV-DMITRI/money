@@ -1,5 +1,6 @@
 "use client";
 
+import type { Id } from "@/lib/ids";
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -105,7 +106,7 @@ function RecurringDialog({ item, onDone }: { item?: Recurring; onDone: () => voi
   const [name, setName] = useState(item?.name ?? "");
   const [type, setType] = useState<"expense" | "income">(item?.type ?? "expense");
   const [amount, setAmount] = useState<number | null>(item?.amount ?? null);
-  const [categoryId, setCategoryId] = useState<number | undefined>(item?.categoryId);
+  const [categoryId, setCategoryId] = useState<Id | undefined>(item?.categoryId);
   const [frequency, setFrequency] = useState<Frequency>(item?.frequency ?? "month");
   const [interval, setInterval] = useState(item?.interval ?? 1);
   const [nextDate, setNextDate] = useState(item?.nextDate ?? today);
@@ -148,7 +149,7 @@ function RecurringDialog({ item, onDone }: { item?: Recurring; onDone: () => voi
           </Field>
         </div>
         <Field label="Категория">
-          <NativeSelect value={cat ?? ""} onChange={(e) => setCategoryId(Number(e.target.value))}>
+          <NativeSelect value={cat ?? ""} onChange={(e) => setCategoryId(e.target.value)}>
             {cats.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.icon} {c.name}

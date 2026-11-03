@@ -27,6 +27,7 @@ import { confirmRecurring, dueReminders, skipRecurring } from "@/lib/services/re
 import { addTransaction, deleteTransaction } from "@/lib/services/transactions";
 import { loadDemoData } from "@/lib/db/demo";
 import { cn } from "@/lib/utils";
+import { syncEnabled } from "@/lib/sync/client";
 
 export function DashboardView() {
   const txs = useTransactions();
@@ -68,6 +69,7 @@ export function DashboardView() {
               <p className="text-xs text-muted-foreground">Депозит и накопления потом добавишь копилками.</p>
             </form>
             <div className="flex flex-col items-center gap-1 border-t pt-4">
+              {!syncEnabled && (
               <Button
                 variant="ghost"
                 disabled={loadingDemo}
@@ -80,6 +82,7 @@ export function DashboardView() {
               >
                 <Sparkles /> {loadingDemo ? "Заполняю…" : "Или посмотреть на примере"}
               </Button>
+              )}
               <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => openEditor()}>
                 Начать без остатка
               </button>

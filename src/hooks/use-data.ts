@@ -1,5 +1,6 @@
 "use client";
 
+import type { Id } from "@/lib/ids";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
 import { db } from "@/lib/db/db";
@@ -14,7 +15,7 @@ export function useCategories() {
 export function useTransactions() {
   return useLiveQuery(async () => {
     const list = await db.transactions.toArray();
-    return list.sort((a, b) => (a.date === b.date ? b.createdAt - a.createdAt || b.id - a.id : a.date < b.date ? 1 : -1));
+    return list.sort((a, b) => (a.date === b.date ? b.createdAt - a.createdAt || (b.id < a.id ? -1 : 1) : a.date < b.date ? 1 : -1));
   }, []);
 }
 export function useItems() {
@@ -39,15 +40,15 @@ export function useTemplates() {
   return useLiveQuery(() => db.templates.toArray(), []);
 }
 
-function byId<T extends { id: number }>(list: T[] | undefined): Map<number, T> {
+function byId<T extends { id: Id }>(list: T[] | undefined): Map<Id, T> {
   return new Map((list ?? []).map((x) => [x.id, x]));
 }
 
 export interface Lookups {
-  categories: Map<number, Category>;
-  goals: Map<number, Goal>;
-  stores: Map<number, Store>;
-  products: Map<number, Product>;
+  categories: Map<Id, Category>;
+  goals: Map<Id, Goal>;
+  stores: Map<Id, Store>;
+  products: Map<Id, Product>;
 }
 
 export function useLookups(): Lookups {

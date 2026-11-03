@@ -9,6 +9,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useTxEditor } from "@/components/transactions/tx-editor";
 import { cn } from "@/lib/utils";
 import { PRIMARY_NAV, SECONDARY_NAV, isActive, type NavItem } from "./nav";
+import { SyncIndicator } from "@/components/sync/sync-indicator";
 
 function Logo() {
   return (
@@ -61,15 +62,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <SideLink key={i.href} item={i} pathname={pathname} />
           ))}
         </nav>
+        <SyncIndicator withLabel className="mt-auto justify-start" />
       </aside>
 
       <div className="min-w-0">
         {/* Мобильная шапка */}
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-background/85 px-4 backdrop-blur md:hidden">
           <Logo />
-          <Button variant="ghost" size="icon" aria-label="Меню" onClick={() => setMenu(true)}>
-            <Menu />
-          </Button>
+          <div className="flex items-center gap-1">
+            <SyncIndicator />
+            <Button variant="ghost" size="icon" aria-label="Меню" onClick={() => setMenu(true)}>
+              <Menu />
+            </Button>
+          </div>
         </header>
 
         <main className="mx-auto w-full max-w-5xl px-4 pb-28 pt-4 sm:px-6 md:pb-10 md:pt-8">{children}</main>

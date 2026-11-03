@@ -1,5 +1,6 @@
 "use client";
 
+import type { Id } from "@/lib/ids";
 import { CornerDownLeft, HelpCircle, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -46,7 +47,7 @@ export function QuickInputBar({ className }: { className?: string }) {
     if (!plan) return;
     if (!plan.amount) return toast.error("Не вижу сумму. Например: «кофе 1200»");
     try {
-      let id: number;
+      let id: Id;
       if (plan.asItem) {
         const quantity = plan.quantity ?? 1;
         id = await addReceipt({

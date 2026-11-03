@@ -8,6 +8,7 @@
 | Стили | Tailwind CSS v4 | Быстро, единая дизайн-система через CSS-переменные |
 | UI-компоненты | Собственные компоненты в стиле shadcn/ui поверх Radix UI | Доступность (a11y) из коробки, полный контроль над кодом |
 | Хранилище | IndexedDB через Dexie 4 + `dexie-react-hooks` (`useLiveQuery`) | Локальные данные, реактивные запросы, работа офлайн |
+| Синхронизация | Supabase: Postgres + RLS, Auth (email/пароль), Realtime | Одни данные на всех устройствах, см. [SYNC.md](./SYNC.md) |
 | Графики | Recharts | Декларативные графики на React |
 | Даты | date-fns (локаль `ru`) | Периоды, недели с понедельника, форматирование |
 | Тосты | sonner | Уведомления с кнопкой «Отменить» |
@@ -32,6 +33,7 @@ src/
     balance/                # reconcile-dialog — «Сверить баланс»
     charts/                 # series-chart, category-bars, heatmap, period-picker
     goals/ budgets/ insights/
+    sync/                   # auth-gate, login-screen, sync-indicator
     views/                  # экраны целиком: dashboard, transactions, reports, goals, goal-detail, …
   hooks/
     use-data.ts             # реактивные запросы к Dexie (useLiveQuery)
@@ -41,17 +43,22 @@ src/
     money.ts dates.ts       # тиыны, формат, парсер выражений; периоды и склонения
     quick-input.ts          # парсер быстрого ввода
     categorize.ts           # подбор категории
-    db/                     # schema, db (Dexie), seed, demo
+    ids.ts                  # UUID v7 и детерминированные v5
+    db/                     # schema, db (Dexie + outbox-middleware), seed, demo, legacy (перенос старой базы)
+    sync/                   # client (Supabase), mapping, remote, engine (push/pull), controller (когда синхронизировать)
     services/               # transactions, goals, recurring, catalog, data (бэкап/CSV)
     analytics/              # чистые функции: balances, reports, goals, budgets, products, insights
   test/setup.ts             # fake-indexeddb для тестов сервисов
 public/                     # manifest.webmanifest, sw.js, иконки
+supabase/
+  migrations/               # SQL-схема для Supabase
+  tests/                    # заглушка окружения Supabase и RLS-тесты для локального Postgres
 ```
 Правило: **вся логика расчётов — чистые функции в `lib/analytics`** (принимают массивы, возвращают результат) и покрыты тестами. Компоненты только отображают.
 
 ## Модель данных
 
-Все суммы — целые числа в **тиынах**. Даты операций — строка `YYYY-MM-DD` (локальная дата, без часовых поясов), метки времени — `number` (ms).
+Все суммы — целые числа в **тиынах**. Даты операций — строка `YYYY-MM-DD` (локальная дата, без часовых поясов), метки времени — `number` (ms). Все `id` и ссылки — **UUID-строки** (v7 для новых записей, v5 — детерминированные, см. SYNC.md).
 
 ```ts
 Category     { id, name, kind: 'expense'|'income', icon, color,
@@ -87,22 +94,23 @@ Template     { id, name, type: 'expense'|'income', amount, categoryId, note }
 Setting      { key, value }
 ```
 
-### Индексы Dexie (v3)
+### Индексы Dexie (база `money-sync`, v1)
 
 ```
-categories:    ++id, kind, order
-transactions:  ++id, date, type, categoryId, goalId, storeId, recurringId, parentId, *tags
-purchaseItems: ++id, transactionId, productId, categoryId, storeId, date
-products:      ++id, &key
-stores:        ++id, &key
-goals:         ++id
-budgets:       ++id, categoryId
-recurring:     ++id, nextDate
-templates:     ++id
-settings:      &key
+categories:    id, kind, order
+transactions:  id, date, type, categoryId, goalId, storeId, recurringId, parentId, *tags
+purchaseItems: id, transactionId, productId, categoryId, storeId, date
+products:      id, key
+stores:        id, key
+goals:         id
+budgets:       id, categoryId
+recurring:     id, nextDate
+templates:     id
+settings:      &key          — локально: курсор синхронизации, владелец данных
+_outbox:       &key, table   — очередь изменений на отправку
 ```
 
-История версий: v1 — со счетами; v2 — переводы удалены, `accountId` убран, начальные остатки счетов сложены в корректировку «Начальный остаток»; v3 — таблица `accounts` удалена. Миграция покрыта тестом.
+Старая база `money` (числовые id, v1 со счетами → v3 «единые деньги») переносится в новую при первом запуске (`lib/db/legacy.ts`), переход покрыт тестом.
 
 ## Ключевые потоки
 

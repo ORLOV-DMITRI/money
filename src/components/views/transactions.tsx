@@ -1,5 +1,6 @@
 "use client";
 
+import type { Id } from "@/lib/ids";
 import { Download, Search, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -61,7 +62,7 @@ export function TransactionsView() {
   const [limit, setLimit] = useState(PAGE);
 
   const itemsByTx = useMemo(() => {
-    const m = new Map<number, PurchaseItem[]>();
+    const m = new Map<Id, PurchaseItem[]>();
     for (const it of items ?? []) {
       const l = m.get(it.transactionId);
       if (l) l.push(it);
@@ -77,7 +78,7 @@ export function TransactionsView() {
     const range = presetRange(preset, today, from, to);
     const query = normalizeKey(q);
     const qAmount = query ? parseAmount(query) : null;
-    const catId = category ? Number(category) : null;
+    const catId = category || null;
     const types: Record<TypeFilter, TransactionType[] | null> = {
       all: null,
       expense: ["expense"],
@@ -113,7 +114,7 @@ export function TransactionsView() {
 
   const totals = useMemo(() => {
     if (!filtered) return null;
-    const catId = category ? Number(category) : null;
+    const catId = category || null;
     let expense = 0;
     if (catId != null) {
       // при фильтре по категории чеки считаем только по позициям этой категории

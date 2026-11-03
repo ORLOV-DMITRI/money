@@ -1,7 +1,13 @@
 import type { Category } from "./schema";
 import { db } from "./db";
+import { detId } from "@/lib/ids";
 
 type CategorySeed = Omit<Category, "id" | "archived" | "order">;
+
+/** Стартовые категории получают одинаковые id на всех устройствах — без дублей при синхронизации */
+export function seedCategoryId(c: Pick<Category, "kind" | "name">) {
+  return detId("category", c.kind, c.name);
+}
 
 export const DEFAULT_EXPENSE_CATEGORIES: CategorySeed[] = [
   { name: "Продукты", kind: "expense", icon: "🛒", color: "#22c55e", keywords: ["продукты", "магазин", "супермаркет", "молоко", "хлеб", "яйца", "мясо", "овощи", "фрукты", "сыр"] },
@@ -43,6 +49,7 @@ export async function ensureSeeded(): Promise<void> {
       await db.categories.bulkAdd(
         [...DEFAULT_EXPENSE_CATEGORIES, ...DEFAULT_INCOME_CATEGORIES].map((c, i) => ({
           ...c,
+          id: seedCategoryId(c),
           archived: false,
           order: i,
         })),

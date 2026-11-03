@@ -1,5 +1,6 @@
 "use client";
 
+import type { Id } from "@/lib/ids";
 import { Repeat } from "lucide-react";
 import { useMemo } from "react";
 import type { Lookups } from "@/hooks/use-data";
@@ -74,7 +75,7 @@ export function TxRow({ tx, lookups, items, showDate }: { tx: Transaction; looku
 
 export function TxList({ txs, lookups, items, groupByDay = true }: { txs: Transaction[]; lookups: Lookups; items?: PurchaseItem[]; groupByDay?: boolean }) {
   const itemsByTx = useMemo(() => {
-    const m = new Map<number, PurchaseItem[]>();
+    const m = new Map<Id, PurchaseItem[]>();
     for (const it of items ?? []) {
       const l = m.get(it.transactionId);
       if (l) l.push(it);

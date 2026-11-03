@@ -3,7 +3,7 @@ import { parseQuickInput } from "./quick-input";
 
 const ctx = {
   today: "2026-11-03",
-  stores: [{ id: 1, name: "Magnum" }, { id: 2, name: "Зелёный базар" }],
+  stores: [{ id: "1", name: "Magnum" }, { id: "2", name: "Зелёный базар" }],
 };
 
 describe("parseQuickInput", () => {
@@ -27,17 +27,17 @@ describe("parseQuickInput", () => {
       amount: 130_000,
       quantity: 2,
       unitPrice: 65_000,
-      storeId: 1,
+      storeId: "1",
       description: "молоко",
     });
-    expect(parseQuickInput("помидоры 1,5 х 900 зелёный базар", ctx)).toMatchObject({ quantity: 1.5, amount: 135_000, storeId: 2, description: "помидоры" });
+    expect(parseQuickInput("помидоры 1,5 х 900 зелёный базар", ctx)).toMatchObject({ quantity: 1.5, amount: 135_000, storeId: "2", description: "помидоры" });
   });
   it("дата числом: будущая дата без года — это прошлый год", () => {
     expect(parseQuickInput("подарок 5000 25.12", ctx).date).toBe("2025-12-25");
     expect(parseQuickInput("подарок 5000 01.11", ctx).date).toBe("2026-11-01");
   });
   it("магазин по первому слову длинного названия", () => {
-    expect(parseQuickInput("бананы 900 зелёный", ctx)).toMatchObject({ storeId: 2, description: "бананы" });
+    expect(parseQuickInput("бананы 900 зелёный", ctx)).toMatchObject({ storeId: "2", description: "бананы" });
   });
   it("без суммы", () => {
     expect(parseQuickInput("просто текст", ctx).amount).toBeNull();

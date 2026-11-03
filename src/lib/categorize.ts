@@ -1,8 +1,9 @@
+import type { Id } from "@/lib/ids";
 import { normalizeKey, type Category } from "@/lib/db/schema";
 
 export interface HistoryHint {
   note: string;
-  categoryId: number;
+  categoryId: Id;
 }
 
 function tokens(text: string): string[] {
@@ -22,7 +23,7 @@ export function suggestCategory(
   categories: Pick<Category, "id" | "keywords" | "name" | "kind" | "archived">[],
   history: HistoryHint[] = [],
   kind: "expense" | "income" = "expense",
-): number | undefined {
+): Id | undefined {
   const norm = normalizeKey(text);
   if (!norm) return undefined;
   const active = categories.filter((c) => c.kind === kind && !c.archived && c.id != null);
@@ -33,7 +34,7 @@ export function suggestCategory(
   if (exact) return exact.categoryId;
 
   const toks = tokens(norm);
-  let best: { id: number; score: number } | undefined;
+  let best: { id: Id; score: number } | undefined;
   for (const c of active) {
     const words = [...c.keywords, normalizeKey(c.name)];
     for (const kw of words) {

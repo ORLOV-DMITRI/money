@@ -1,21 +1,24 @@
-import { ALL_TABLES, db, type TableName } from "@/lib/db/db";
+import type { Id } from "@/lib/ids";
+import { SYNCED_TABLES, db, type SyncedTable } from "@/lib/db/db";
+import { convertLegacyTables, type LegacyTables } from "@/lib/db/legacy";
 import { ensureSeeded } from "@/lib/db/seed";
 import { fromTiyn } from "@/lib/money";
 
 export const BACKUP_FORMAT = "money-backup";
-export const BACKUP_VERSION = 1;
+/** v1 — числовые id и счета; v2 — UUID, «единые деньги» */
+export const BACKUP_VERSION = 2;
 
 export interface Backup {
   format: typeof BACKUP_FORMAT;
   version: number;
   exportedAt: string;
-  tables: Record<TableName, unknown[]>;
+  tables: Partial<Record<string, unknown[]>>;
 }
 
 export async function exportBackup(): Promise<Backup> {
-  const tables = {} as Record<TableName, unknown[]>;
-  await db.transaction("r", ALL_TABLES.map((t) => db.table(t)), async () => {
-    for (const t of ALL_TABLES) tables[t] = await db.table(t).toArray();
+  const tables: Record<string, unknown[]> = {};
+  await db.transaction("r", SYNCED_TABLES.map((t) => db.table(t)), async () => {
+    for (const t of SYNCED_TABLES) tables[t] = await db.table(t).toArray();
   });
   return { format: BACKUP_FORMAT, version: BACKUP_VERSION, exportedAt: new Date().toISOString(), tables };
 }
@@ -26,22 +29,25 @@ export function isBackup(x: unknown): x is Backup {
   return b.format === BACKUP_FORMAT && typeof b.version === "number" && !!b.tables && typeof b.tables === "object";
 }
 
-/** Полностью заменяет данные содержимым резервной копии */
+/** Полностью заменяет данные содержимым резервной копии (с синхронизацией — на всех устройствах) */
 export async function importBackup(raw: unknown): Promise<void> {
   if (!isBackup(raw)) throw new Error("Это не похоже на резервную копию приложения");
   if (raw.version > BACKUP_VERSION) throw new Error("Копия сделана более новой версией приложения");
-  await db.transaction("rw", ALL_TABLES.map((t) => db.table(t)), async () => {
-    for (const t of ALL_TABLES) {
+  const tables =
+    raw.version < 2 ? convertLegacyTables(raw.tables as LegacyTables) : (raw.tables as Record<SyncedTable, Record<string, unknown>[]>);
+  await db.transaction("rw", SYNCED_TABLES.map((t) => db.table(t)), async () => {
+    for (const t of SYNCED_TABLES) {
       await db.table(t).clear();
-      const rows = raw.tables[t];
+      const rows = tables[t];
       if (Array.isArray(rows) && rows.length) await db.table(t).bulkAdd(rows);
     }
   });
 }
 
+/** Удаляет все данные (настройки устройства и вход сохраняются) и заново создаёт стартовые категории */
 export async function resetAll(): Promise<void> {
-  await db.transaction("rw", ALL_TABLES.map((t) => db.table(t)), async () => {
-    for (const t of ALL_TABLES) await db.table(t).clear();
+  await db.transaction("rw", SYNCED_TABLES.map((t) => db.table(t)), async () => {
+    for (const t of SYNCED_TABLES) await db.table(t).clear();
   });
   await ensureSeeded();
 }
@@ -69,8 +75,8 @@ export async function exportCSV(): Promise<string> {
     db.purchaseItems.toArray(),
     db.products.toArray(),
   ]);
-  const name = <T extends { id?: number; name: string }>(list: T[], id?: number) => list.find((x) => x.id === id)?.name ?? "";
-  const itemsByTx = new Map<number, string[]>();
+  const name = <T extends { id?: Id; name: string }>(list: T[], id?: Id) => list.find((x) => x.id === id)?.name ?? "";
+  const itemsByTx = new Map<Id, string[]>();
   for (const it of items) {
     const p = name(products, it.productId);
     const l = itemsByTx.get(it.transactionId) ?? [];

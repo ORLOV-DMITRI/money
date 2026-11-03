@@ -82,11 +82,11 @@ export async function loadDemoData(today: ISODate): Promise<void> {
   const cat = (name: string, kind: "expense" | "income" = "expense") => cats.find((c) => c.name === name && c.kind === kind)!.id!;
 
   // Магазины и продукты
-  const storeIds = (await db.stores.bulkAdd(STORES.map(([name]) => ({ name, key: normalizeKey(name) })), { allKeys: true })) as number[];
+  const storeIds = (await db.stores.bulkAdd(STORES.map(([name]) => ({ name, key: normalizeKey(name) })), { allKeys: true })) as string[];
   const productIds = (await db.products.bulkAdd(
     PRODUCTS.map((p) => ({ name: p.name, key: normalizeKey(p.name), unit: p.unit, categoryId: cat(p.category), createdAt: startTs })),
     { allKeys: true },
-  )) as number[];
+  )) as string[];
 
   // Копилки (до операций, чтобы зарплата делала автоотчисления)
   const deadlineVacation = toISODate(new Date(parseISODate(today).getFullYear(), parseISODate(today).getMonth() + 5, 15));
@@ -98,7 +98,7 @@ export async function loadDemoData(today: ISODate): Promise<void> {
       { name: "Депозит", icon: "🏦", color: "#4f46e5", target: tiyn(1_000_000), autoPercent: 0, archived: false, createdAt: startTs },
     ],
     { allKeys: true },
-  )) as number[];
+  )) as string[];
 
   const txs: Omit<Transaction, "id">[] = [];
   const receipts: { tx: Omit<Transaction, "id">; items: Omit<PurchaseItem, "id" | "transactionId">[] }[] = [];
@@ -197,7 +197,7 @@ export async function loadDemoData(today: ISODate): Promise<void> {
   await db.transaction("rw", db.transactions, db.purchaseItems, async () => {
     await db.transactions.bulkAdd(txs);
     for (const r of receipts) {
-      const id = (await db.transactions.add(r.tx)) as number;
+      const id = (await db.transactions.add(r.tx)) as string;
       await db.purchaseItems.bulkAdd(r.items.map((i) => ({ ...i, transactionId: id })));
     }
   });

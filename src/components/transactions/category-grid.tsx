@@ -1,5 +1,6 @@
 "use client";
 
+import type { Id } from "@/lib/ids";
 import { useMemo, useState } from "react";
 import type { Category, Transaction } from "@/lib/db/schema";
 import { cn } from "@/lib/utils";
@@ -15,14 +16,14 @@ export function CategoryGrid({
 }: {
   categories: Category[];
   kind: "expense" | "income";
-  value: number | undefined;
-  onChange: (id: number) => void;
+  value: Id | undefined;
+  onChange: (id: Id) => void;
   txs?: Transaction[];
   limit?: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const sorted = useMemo(() => {
-    const usage = new Map<number, number>();
+    const usage = new Map<Id, number>();
     for (const t of (txs ?? []).slice(0, 400)) if (t.categoryId != null) usage.set(t.categoryId, (usage.get(t.categoryId) ?? 0) + 1);
     return categories
       .filter((c) => c.kind === kind && (!c.archived || c.id === value))

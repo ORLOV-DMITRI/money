@@ -1,8 +1,8 @@
 "use client";
 
-import { Download, FileSpreadsheet, Monitor, Moon, Plus, RotateCcw, Sparkles, Sun, Trash2, Upload } from "lucide-react";
+import { Cloud, Download, FileSpreadsheet, LogOut, RefreshCw, Monitor, Moon, Plus, RotateCcw, Sparkles, Sun, Trash2, Upload } from "lucide-react";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/app-shell";
 import { useTheme, type Theme } from "@/components/layout/theme";
@@ -19,6 +19,10 @@ import type { Template } from "@/lib/db/schema";
 import { formatMoney } from "@/lib/money";
 import { downloadFile, exportBackup, exportCSV, importBackup, resetAll } from "@/lib/services/data";
 import { SECONDARY_NAV } from "@/components/layout/nav";
+import { syncEnabled, getSupabase } from "@/lib/sync/client";
+import { requestSync, signOutAndWipe } from "@/lib/sync/controller";
+import { syncLabel, useSyncStatus } from "@/components/sync/sync-indicator";
+import { formatDayHeading } from "@/lib/dates";
 
 export function SettingsView() {
   const { theme, setTheme } = useTheme();
@@ -30,7 +34,7 @@ export function SettingsView() {
   const onImport = async (file: File) => {
     try {
       const data = JSON.parse(await file.text());
-      if (!(await confirm({ title: "Восстановить из копии?", description: "Текущие данные будут полностью заменены данными из файла.", confirmText: "Восстановить", destructive: true }))) return;
+      if (!(await confirm({ title: "Восстановить из копии?", description: syncEnabled ? "Текущие данные будут полностью заменены данными из файла — на всех устройствах." : "Текущие данные будут полностью заменены данными из файла.", confirmText: "Восстановить", destructive: true }))) return;
       await importBackup(data);
       toast.success("Данные восстановлены");
     } catch (e) {
@@ -42,6 +46,8 @@ export function SettingsView() {
     <>
       <PageHeader title="Настройки" />
       <div className="grid gap-4 lg:grid-cols-2">
+        {syncEnabled && <AccountCard />}
+
         <Card>
           <CardHeader>
             <CardTitle>Оформление</CardTitle>
@@ -81,7 +87,9 @@ export function SettingsView() {
             <CardTitle>Данные</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-2">
-            <p className="mb-1 text-sm text-muted-foreground">Всё хранится только в этом браузере. Делай резервную копию, чтобы перенести данные на другое устройство.</p>
+            <p className="mb-1 text-sm text-muted-foreground">
+              {syncEnabled ? "Данные хранятся в аккаунте и на каждом устройстве. Резервная копия — на всякий случай." : "Всё хранится только в этом браузере. Делай резервную копию, чтобы перенести данные на другое устройство."}
+            </p>
             <Button variant="outline" className="justify-start" onClick={async () => downloadFile(JSON.stringify(await exportBackup()), `money-backup-${today}.json`, "application/json")}>
               <Download /> Скачать резервную копию (JSON)
             </Button>
@@ -102,6 +110,7 @@ export function SettingsView() {
             <Button variant="outline" className="justify-start" onClick={async () => downloadFile(await exportCSV(), `operations-${today}.csv`, "text/csv;charset=utf-8")}>
               <FileSpreadsheet /> Операции в CSV (для Excel)
             </Button>
+            {!syncEnabled && (
             <Button
               variant="outline"
               className="justify-start"
@@ -116,11 +125,12 @@ export function SettingsView() {
             >
               <Sparkles /> Заполнить демо-данными
             </Button>
+            )}
             <Button
               variant="ghost"
               className="justify-start text-destructive"
               onClick={async () => {
-                if (!(await confirm({ title: "Удалить все данные?", description: "Операции, копилки, бюджеты — всё. Отменить нельзя. Сначала скачай резервную копию, если она нужна.", confirmText: "Удалить всё", destructive: true }))) return;
+                if (!(await confirm({ title: "Удалить все данные?", description: `Операции, копилки, бюджеты — всё${syncEnabled ? " и на всех устройствах" : ""}. Отменить нельзя. Сначала скачай резервную копию, если она нужна.`, confirmText: "Удалить всё", destructive: true }))) return;
                 await resetAll();
                 toast("Данные сброшены");
               }}
@@ -130,7 +140,7 @@ export function SettingsView() {
           </CardContent>
         </Card>
       </div>
-      <p className="mt-6 text-center text-xs text-muted-foreground">Деньги · учёт расходов в тенге · данные не покидают устройство</p>
+      <p className="mt-6 text-center text-xs text-muted-foreground">Деньги · учёт расходов в тенге{syncEnabled ? "" : " · данные не покидают устройство"}</p>
     </>
   );
 }
@@ -203,7 +213,7 @@ function TemplateDialog({ template, onDone }: { template?: Template; onDone: () 
           </Field>
         </div>
         <Field label="Категория">
-          <NativeSelect value={cat ?? ""} onChange={(e) => setCategoryId(Number(e.target.value))}>
+          <NativeSelect value={cat ?? ""} onChange={(e) => setCategoryId(e.target.value)}>
             {cats.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.icon} {c.name}
@@ -227,5 +237,59 @@ function TemplateDialog({ template, onDone }: { template?: Template; onDone: () 
         )}
       </form>
     </DialogContent>
+  );
+}
+
+function AccountCard() {
+  const status = useSyncStatus();
+  const confirm = useConfirm();
+  const [email, setEmail] = useState<string | null>(null);
+  useEffect(() => {
+    getSupabase()
+      ?.auth.getUser()
+      .then(({ data }) => setEmail(data.user?.email ?? null));
+  }, []);
+  const last = status.lastSyncedAt ? new Date(status.lastSyncedAt) : null;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Cloud className="size-4 text-primary" /> Аккаунт и синхронизация
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3">
+        <div className="text-sm">
+          <p className="font-medium">{email ?? "…"}</p>
+          <p className="text-muted-foreground">
+            {syncLabel(status)}
+            {last && status.state === "idle" && status.pending === 0 && ` · ${formatDayHeading(last.toISOString().slice(0, 10)).toLowerCase()} в ${last.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`}
+          </p>
+          {status.error && <p className="mt-1 text-xs text-destructive">{status.error}</p>}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => requestSync()} disabled={status.state === "syncing"}>
+            <RefreshCw className={status.state === "syncing" ? "animate-spin" : ""} /> Синхронизировать
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={async () => {
+              const ok = await confirm({
+                title: "Выйти из аккаунта?",
+                description:
+                  status.pending > 0
+                    ? `${status.pending} изменений ещё не отправлены — без сети они пропадут. Данные с этого устройства будут стёрты, в аккаунте всё сохранится.`
+                    : "Данные с этого устройства будут стёрты, в аккаунте всё сохранится.",
+                confirmText: "Выйти",
+                destructive: status.pending > 0,
+              });
+              if (ok) await signOutAndWipe();
+            }}
+          >
+            <LogOut /> Выйти
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

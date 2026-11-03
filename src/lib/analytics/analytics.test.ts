@@ -9,7 +9,7 @@ import { getPeriod } from "@/lib/dates";
 
 let seq = 1;
 const tx = (t: Partial<Transaction> & Pick<Transaction, "type" | "amount">): Transaction => ({
-  id: seq++,
+  id: String(seq++),
   date: "2026-11-01",
   note: "",
   tags: [],
@@ -23,17 +23,17 @@ describe("балансы", () => {
     tx({ type: "adjustment", amount: 50 }),
     tx({ type: "income", amount: 1000 }),
     tx({ type: "expense", amount: 300 }),
-    tx({ type: "goal_deposit", amount: 100, goalId: 7 }),
-    tx({ type: "goal_withdraw", amount: 40, goalId: 7 }),
+    tx({ type: "goal_deposit", amount: 100, goalId: "7" }),
+    tx({ type: "goal_withdraw", amount: 40, goalId: "7" }),
     tx({ type: "adjustment", amount: -20, note: "Сверка" }),
   ];
   it("свободные деньги, копилки и итог", () => {
-    expect(goalBalances(txs).get(7)).toBe(60);
-    const t = balanceTotals([{ id: 7, archived: false }], txs);
+    expect(goalBalances(txs).get("7")).toBe(60);
+    const t = balanceTotals([{ id: "7", archived: false }], txs);
     expect(t).toEqual({ free: 50 + 1000 - 300 - 100 + 40 - 20, saved: 60, total: 50 + 1000 - 300 - 20 });
   });
   it("деньги закрытой копилки остаются в итоге", () => {
-    expect(balanceTotals([{ id: 7, archived: true }], txs).saved).toBe(60);
+    expect(balanceTotals([{ id: "7", archived: true }], txs).saved).toBe(60);
   });
   it("корректировка не попадает в приход и расход", () => {
     const s = summarize(txs, getPeriod("month", "2026-11-01"));
@@ -43,17 +43,17 @@ describe("балансы", () => {
 
 describe("отчёты", () => {
   it("чек раскладывается по категориям позиций, остаток — в категорию операции", () => {
-    const r = tx({ type: "expense", amount: 1000, categoryId: 1 });
-    const simple = tx({ type: "expense", amount: 500, categoryId: 2 });
+    const r = tx({ type: "expense", amount: 1000, categoryId: "1" });
+    const simple = tx({ type: "expense", amount: 500, categoryId: "2" });
     const items = [
-      { transactionId: r.id!, categoryId: 1, total: 600 },
-      { transactionId: r.id!, categoryId: 3, total: 300 },
+      { transactionId: r.id!, categoryId: "1", total: 600 },
+      { transactionId: r.id!, categoryId: "3", total: 300 },
     ];
     const cats = byCategory(expenseEntries([r, simple], items), getPeriod("month", "2026-11-01"));
     expect(cats.map((c) => [c.categoryId, c.amount])).toEqual([
-      [1, 700],
-      [2, 500],
-      [3, 300],
+      ["1", 700],
+      ["2", 500],
+      ["3", 300],
     ]);
     expect(cats.reduce((s, c) => s + c.share, 0)).toBeCloseTo(1);
   });
@@ -98,28 +98,28 @@ describe("копилки", () => {
   });
   it("автоотчисления: процент, округление до тенге, пропуск закрытых", () => {
     const d = autoDeposits(65_000_000, [
-      { id: 1, autoPercent: 10, archived: false },
-      { id: 2, autoPercent: 5, archived: false },
-      { id: 3, autoPercent: 50, archived: true },
-      { id: 4, autoPercent: 5, archived: false, completedAt: 1 },
+      { id: "1", autoPercent: 10, archived: false },
+      { id: "2", autoPercent: 5, archived: false },
+      { id: "3", autoPercent: 50, archived: true },
+      { id: "4", autoPercent: 5, archived: false, completedAt: 1 },
     ]);
     expect(d).toEqual([
-      { goalId: 1, amount: 6_500_000 },
-      { goalId: 2, amount: 3_250_000 },
+      { goalId: "1", amount: 6_500_000 },
+      { goalId: "2", amount: 3_250_000 },
     ]);
-    expect(autoDeposits(12_345, [{ id: 1, autoPercent: 7, archived: false }])).toEqual([{ goalId: 1, amount: 900 }]);
+    expect(autoDeposits(12_345, [{ id: "1", autoPercent: 7, archived: false }])).toEqual([{ goalId: "1", amount: 900 }]);
   });
 });
 
 describe("бюджеты", () => {
   it("уровень, прогноз и дата исчерпания", () => {
     const entries = [
-      { txId: 1, date: "2026-11-01", categoryId: 5, amount: 30_000 },
-      { txId: 2, date: "2026-11-02", categoryId: 5, amount: 30_000 },
-      { txId: 3, date: "2026-11-02", categoryId: 6, amount: 99_999 },
-      { txId: 4, date: "2026-10-31", categoryId: 5, amount: 99_999 },
+      { txId: "1", date: "2026-11-01", categoryId: "5", amount: 30_000 },
+      { txId: "2", date: "2026-11-02", categoryId: "5", amount: 30_000 },
+      { txId: "3", date: "2026-11-02", categoryId: "6", amount: 99_999 },
+      { txId: "4", date: "2026-10-31", categoryId: "5", amount: 99_999 },
     ];
-    const s = budgetStatus({ categoryId: 5, limit: 100_000, period: "month" }, entries, "2026-11-03");
+    const s = budgetStatus({ categoryId: "5", limit: 100_000, period: "month" }, entries, "2026-11-03");
     expect(s.spent).toBe(60_000);
     expect(s.level).toBe("ok");
     expect(s.forecast).toBe(600_000);
@@ -139,13 +139,13 @@ describe("продукты", () => {
     expect(normalizeUnitPrice(1000, "кг", "г")).toBe(1);
   });
   it("история цен, инфляция и сравнение магазинов", () => {
-    const it = (date: string, unitPrice: number, storeId: number) => ({ date, unitPrice, unit: "л" as const, quantity: 1, total: unitPrice, storeId });
-    const s = productStats([it("2026-05-01", 50_000, 1), it("2026-05-10", 52_000, 2), it("2026-11-01", 60_000, 1)], "л", "2026-11-03");
+    const it = (date: string, unitPrice: number, storeId: string) => ({ date, unitPrice, unit: "л" as const, quantity: 1, total: unitPrice, storeId });
+    const s = productStats([it("2026-05-01", 50_000, "1"), it("2026-05-10", 52_000, "2"), it("2026-11-01", 60_000, "1")], "л", "2026-11-03");
     expect(s.changeSinceFirst).toBeCloseTo(20);
     // последняя покупка не позже 07.05 — это 01.05 по 500
     expect(s.changeSixMonths).toBeCloseTo(20);
-    expect(s.byStore[0]).toMatchObject({ storeId: 2, avg: 52_000 });
-    expect(s.byStore[1]).toMatchObject({ storeId: 1, avg: 55_000 });
+    expect(s.byStore[0]).toMatchObject({ storeId: "2", avg: 52_000 });
+    expect(s.byStore[1]).toMatchObject({ storeId: "1", avg: 55_000 });
     expect(s.avg).toBe(54_000); // 540 ₸, округлено до тенге
     expect(s.min).toBe(50_000);
   });

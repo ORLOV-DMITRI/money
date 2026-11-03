@@ -1,3 +1,4 @@
+import type { Id } from "@/lib/ids";
 import { addDaysISO, toISODate, type ISODate } from "@/lib/dates";
 import { parseAmount } from "@/lib/money";
 import { normalizeKey } from "@/lib/db/schema";
@@ -12,12 +13,12 @@ export interface QuickParse {
   date: ISODate;
   tags: string[];
   description: string;
-  storeId?: number;
+  storeId?: Id;
 }
 
 export interface QuickContext {
   today: ISODate;
-  stores?: { id?: number; name: string }[];
+  stores?: { id?: Id; name: string }[];
 }
 
 const DATE_WORDS: Record<string, number> = { сегодня: 0, вчера: -1, позавчера: -2 };
@@ -41,7 +42,7 @@ function parseDateToken(tok: string, today: ISODate): ISODate | null {
 }
 
 /** Ищем самое длинное имя магазина, которое целиком встречается среди слов строки */
-function matchName<T extends { id?: number; name: string }>(words: string[], list: T[]): { item: T; used: Set<number> } | null {
+function matchName<T extends { id?: Id; name: string }>(words: string[], list: T[]): { item: T; used: Set<number> } | null {
   const sorted = [...list].sort((a, b) => b.name.length - a.name.length);
   for (const item of sorted) {
     const nameToks = normalizeKey(item.name).split(" ");

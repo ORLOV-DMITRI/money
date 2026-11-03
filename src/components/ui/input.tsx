@@ -36,12 +36,28 @@ export function Label({ className, ...props }: React.ComponentProps<"label">) {
   return <label className={cn("text-sm font-medium text-muted-foreground", className)} {...props} />;
 }
 
+/**
+ * Подпись + поле. Подпись связывается с полем через id (доступность и клик по подписи):
+ * если единственный потомок — элемент без id, ему выдаётся сгенерированный id.
+ */
 export function Field({ label, children, className, hint }: { label: string; children: React.ReactNode; className?: string; hint?: React.ReactNode }) {
+  const autoId = React.useId();
+  const hintId = `${autoId}-hint`;
+  let control = children;
+  let id: string | undefined;
+  if (React.isValidElement<{ id?: string; "aria-describedby"?: string }>(children)) {
+    id = children.props.id ?? autoId;
+    control = React.cloneElement(children, { id, ...(hint ? { "aria-describedby": hintId } : {}) });
+  }
   return (
     <div className={cn("grid gap-1.5", className)}>
-      <Label>{label}</Label>
-      {children}
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      <Label htmlFor={id}>{label}</Label>
+      {control}
+      {hint && (
+        <p id={hintId} className="text-xs text-muted-foreground">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }

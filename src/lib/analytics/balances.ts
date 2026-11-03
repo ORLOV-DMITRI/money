@@ -1,3 +1,4 @@
+import type { Id } from "@/lib/ids";
 import type { Transaction } from "@/lib/db/schema";
 
 type Tx = Pick<Transaction, "type" | "amount" | "goalId">;
@@ -15,8 +16,8 @@ export function freeDelta(tx: Pick<Transaction, "type" | "amount">): number {
   }
 }
 
-export function goalBalances(txs: Tx[]): Map<number, number> {
-  const map = new Map<number, number>();
+export function goalBalances(txs: Tx[]): Map<Id, number> {
+  const map = new Map<Id, number>();
   for (const tx of txs) {
     if (tx.goalId == null) continue;
     if (tx.type === "goal_deposit") map.set(tx.goalId, (map.get(tx.goalId) ?? 0) + tx.amount);
@@ -33,7 +34,7 @@ export interface BalanceTotals {
   total: number;
 }
 
-export function balanceTotals(goals: { id: number; archived: boolean }[], txs: Tx[]): BalanceTotals {
+export function balanceTotals(goals: { id: Id; archived: boolean }[], txs: Tx[]): BalanceTotals {
   const free = txs.reduce((s, t) => s + freeDelta(t), 0);
   const gb = goalBalances(txs);
   // деньги закрытой копилки всё равно существуют — считаем все

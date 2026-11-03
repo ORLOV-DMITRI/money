@@ -1,4 +1,7 @@
 import type { Frequency, ISODate } from "@/lib/dates";
+import type { Id } from "@/lib/ids";
+
+export type { Id };
 
 /** Все суммы — целые тиыны. */
 export type Tiyn = number;
@@ -6,7 +9,7 @@ export type Tiyn = number;
 export type CategoryKind = "expense" | "income";
 
 export interface Category {
-  id: number;
+  id: Id;
   name: string;
   kind: CategoryKind;
   icon: string;
@@ -24,18 +27,18 @@ export interface Category {
 export type TransactionType = "expense" | "income" | "goal_deposit" | "goal_withdraw" | "adjustment";
 
 export interface Transaction {
-  id: number;
+  id: Id;
   type: TransactionType;
   amount: Tiyn;
   date: ISODate;
-  categoryId?: number;
-  goalId?: number;
-  storeId?: number;
+  categoryId?: Id;
+  goalId?: Id;
+  storeId?: Id;
   note: string;
   tags: string[];
-  recurringId?: number;
+  recurringId?: Id;
   /** автоотчисление в копилку, порождённое приходом parentId */
-  parentId?: number;
+  parentId?: Id;
   createdAt: number;
   updatedAt: number;
 }
@@ -44,11 +47,11 @@ export type Unit = "шт" | "кг" | "г" | "л" | "мл" | "уп";
 export const UNITS: Unit[] = ["шт", "кг", "г", "л", "мл", "уп"];
 
 export interface PurchaseItem {
-  id: number;
-  transactionId: number;
-  productId: number;
-  categoryId: number;
-  storeId?: number;
+  id: Id;
+  transactionId: Id;
+  productId: Id;
+  categoryId: Id;
+  storeId?: Id;
   quantity: number;
   unit: Unit;
   /** цена за единицу */
@@ -58,23 +61,23 @@ export interface PurchaseItem {
 }
 
 export interface Product {
-  id: number;
+  id: Id;
   name: string;
   /** нормализованное имя для поиска и уникальности */
   key: string;
   unit: Unit;
-  categoryId: number;
+  categoryId: Id;
   createdAt: number;
 }
 
 export interface Store {
-  id: number;
+  id: Id;
   name: string;
   key: string;
 }
 
 export interface Goal {
-  id: number;
+  id: Id;
   name: string;
   icon: string;
   color: string;
@@ -90,8 +93,8 @@ export interface Goal {
 export type BudgetPeriod = "month" | "week";
 
 export interface Budget {
-  id: number;
-  categoryId: number;
+  id: Id;
+  categoryId: Id;
   limit: Tiyn;
   period: BudgetPeriod;
 }
@@ -99,11 +102,11 @@ export interface Budget {
 export type RecurringMode = "auto" | "remind";
 
 export interface Recurring {
-  id: number;
+  id: Id;
   name: string;
   type: "expense" | "income";
   amount: Tiyn;
-  categoryId: number;
+  categoryId: Id;
   frequency: Frequency;
   interval: number;
   nextDate: ISODate;
@@ -113,11 +116,11 @@ export interface Recurring {
 }
 
 export interface Template {
-  id: number;
+  id: Id;
   name: string;
   type: "expense" | "income";
   amount: Tiyn;
-  categoryId: number;
+  categoryId: Id;
   note: string;
 }
 

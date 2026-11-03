@@ -1,3 +1,4 @@
+import type { Id } from "@/lib/ids";
 import { addDaysISO, type ISODate } from "@/lib/dates";
 import { percentChange } from "@/lib/money";
 import type { PurchaseItem, Unit } from "@/lib/db/schema";
@@ -23,11 +24,11 @@ const roundTenge = (v: number) => Math.round(v / 100) * 100;
 export interface PricePoint {
   date: ISODate;
   price: number;
-  storeId?: number;
+  storeId?: Id;
 }
 
 export interface StorePrice {
-  storeId: number | undefined;
+  storeId: Id | undefined;
   avg: number;
   min: number;
   last: number;
@@ -73,7 +74,7 @@ export function productStats(
   const tooOld = addDaysISO(today, -270);
   const past = [...history].reverse().find((h) => h.date <= sixAgo && h.date >= tooOld);
 
-  const storeMap = new Map<number | undefined, PricePoint[]>();
+  const storeMap = new Map<Id | undefined, PricePoint[]>();
   for (const h of history) {
     const l = storeMap.get(h.storeId);
     if (l) l.push(h);
