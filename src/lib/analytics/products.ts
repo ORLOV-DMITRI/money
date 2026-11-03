@@ -17,6 +17,9 @@ export function normalizeUnitPrice(unitPrice: number, unit: Unit, baseUnit: Unit
   return unitPrice;
 }
 
+/** Средние цены показываем в целых тенге */
+const roundTenge = (v: number) => Math.round(v / 100) * 100;
+
 export interface PricePoint {
   date: ISODate;
   price: number;
@@ -79,7 +82,7 @@ export function productStats(
   const byStore: StorePrice[] = [...storeMap.entries()]
     .map(([storeId, pts]) => ({
       storeId,
-      avg: Math.round(pts.reduce((s, p) => s + p.price, 0) / pts.length),
+      avg: roundTenge(pts.reduce((s, p) => s + p.price, 0) / pts.length),
       min: Math.min(...pts.map((p) => p.price)),
       last: pts[pts.length - 1].price,
       count: pts.length,
@@ -95,7 +98,7 @@ export function productStats(
     last,
     min: prices.length ? Math.min(...prices) : 0,
     max: prices.length ? Math.max(...prices) : 0,
-    avg: prices.length ? Math.round(prices.reduce((s, p) => s + p, 0) / prices.length) : 0,
+    avg: prices.length ? roundTenge(prices.reduce((s, p) => s + p, 0) / prices.length) : 0,
     changeSinceFirst: first && last && history.length > 1 ? percentChange(first.price, last.price) : null,
     changeSixMonths: past && last ? percentChange(past.price, last.price) : null,
     byStore,

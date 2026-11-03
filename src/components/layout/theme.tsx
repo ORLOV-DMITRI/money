@@ -16,19 +16,31 @@ function apply(theme: Theme) {
 /** Скрипт до гидрации, чтобы не было вспышки светлой темы */
 export const themeInitScript = `(function(){try{var t=localStorage.getItem("${KEY}")||"system";var d=t==="dark"||(t==="system"&&matchMedia("(prefers-color-scheme: dark)").matches);if(d)document.documentElement.classList.add("dark")}catch(e){}})()`;
 
+const CHANGE = "theme-change";
+
+function readTheme(): Theme {
+  try {
+    return (localStorage.getItem(KEY) as Theme) || "system";
+  } catch {
+    return "system";
+  }
+}
+
+function subscribe(cb: () => void) {
+  window.addEventListener(CHANGE, cb);
+  window.addEventListener("storage", cb);
+  return () => {
+    window.removeEventListener(CHANGE, cb);
+    window.removeEventListener("storage", cb);
+  };
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = React.useState<Theme>("system");
+  // Тема живёт в localStorage (настройка устройства), React лишь подписан на неё
+  const theme = React.useSyncExternalStore(subscribe, readTheme, () => "system" as Theme);
 
   React.useEffect(() => {
-    let saved: Theme = "system";
-    try {
-      saved = (localStorage.getItem(KEY) as Theme) || "system";
-    } catch {}
-    setThemeState(saved);
-    apply(saved);
-  }, []);
-
-  React.useEffect(() => {
+    apply(theme);
     if (theme !== "system") return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const on = () => apply("system");
@@ -37,11 +49,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [theme]);
 
   const setTheme = React.useCallback((t: Theme) => {
-    setThemeState(t);
     try {
       localStorage.setItem(KEY, t);
     } catch {}
-    apply(t);
+    window.dispatchEvent(new Event(CHANGE));
   }, []);
 
   return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>;

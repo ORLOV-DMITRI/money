@@ -1,0 +1,22 @@
+{
+  "name": "Деньги — учёт расходов в тенге",
+  "short_name": "Деньги",
+  "description": "Расходы по категориям и продуктам, копилки, бюджеты и отчёты. Данные хранятся на устройстве.",
+  "lang": "ru",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7faf8",
+  "theme_color": "#10a777",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "shortcuts": [
+    { "name": "Операции", "url": "/transactions/" },
+    { "name": "Отчёты", "url": "/reports/" },
+    { "name": "Копилки", "url": "/goals/" }
+  ]
+}

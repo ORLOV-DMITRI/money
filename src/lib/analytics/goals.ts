@@ -1,7 +1,8 @@
-import { addDaysISO, daysBetween, toISODate, type ISODate } from "@/lib/dates";
+import { subMonths } from "date-fns";
+import { addDaysISO, daysBetween, getPeriod, parseISODate, toISODate, type ISODate } from "@/lib/dates";
 import type { Goal, Transaction } from "@/lib/db/schema";
 
-export const PACE_WINDOW_DAYS = 90;
+export const PACE_MONTHS = 3;
 
 export interface GoalStats {
   balance: number;
@@ -36,15 +37,20 @@ export function goalStats(
   const remaining = Math.max(0, goal.target - balance);
   const reached = balance >= goal.target && goal.target > 0;
 
-  // Темп: чистые пополнения за окно (не длиннее срока жизни копилки)
+  // Темп: чистые пополнения за 3 последних полных месяца — так ежемесячные взносы
+  // не «выпадают» из окна из-за одного дня. Если копилка моложе, считаем с её создания.
   const firstDate = txs.reduce<ISODate | null>((m, t) => (m == null || t.date < m ? t.date : m), null);
   const created = toISODate(new Date(goal.createdAt));
-  const start = [firstDate ?? today, created].sort()[0];
-  const windowDays = Math.max(1, Math.min(PACE_WINDOW_DAYS, daysBetween(start, today) + 1));
-  const windowStart = addDaysISO(today, -(windowDays - 1));
+  const born = [firstDate ?? today, created].sort()[0];
+  const monthStart = getPeriod("month", today).start;
+  let windowStart = toISODate(subMonths(parseISODate(monthStart), PACE_MONTHS));
+  let windowEnd = addDaysISO(monthStart, -1);
+  if (born > windowStart) windowStart = born;
+  if (windowStart > windowEnd) windowEnd = today; // копилке меньше месяца
+  const windowDays = Math.max(1, daysBetween(windowStart, windowEnd) + 1);
   let net = 0;
   for (const tx of txs) {
-    if (tx.date < windowStart || tx.date > today) continue;
+    if (tx.date < windowStart || tx.date > windowEnd) continue;
     if (tx.type === "goal_deposit") net += tx.amount;
     if (tx.type === "goal_withdraw") net -= tx.amount;
   }

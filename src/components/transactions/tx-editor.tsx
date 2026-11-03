@@ -519,6 +519,8 @@ function ReceiptForm({ tx, onDone }: { tx?: Transaction; onDone: () => void }) {
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
+    const incomplete = rows.find((r) => r.productName.trim() && !r.total);
+    if (incomplete) return toast.error(`Укажи цену или сумму для «${incomplete.productName.trim()}»`);
     const filled = rows.filter((r) => r.productName.trim() && r.total);
     if (!filled.length) return toast.error("Добавь хотя бы одну позицию с названием и суммой");
     const input = {
@@ -684,11 +686,10 @@ function ReceiptForm({ tx, onDone }: { tx?: Transaction; onDone: () => void }) {
 
 /** Компактное поле суммы для строки чека: держит текст, пока его редактируют */
 function RowAmount({ value, onChange, label }: { value: number | null; onChange: (v: number | null) => void; label: string }) {
-  const [text, setText] = React.useState(value != null ? tiynToInput(value) : "");
+  const [text, setText] = React.useState("");
   const [focused, setFocused] = React.useState(false);
-  React.useEffect(() => {
-    if (!focused) setText(value != null ? tiynToInput(value) : "");
-  }, [value, focused]);
+  // Пока поле в фокусе — показываем то, что набирают; иначе — значение из строки чека
+  const shown = focused ? text : value != null ? tiynToInput(value) : "";
   return (
     <div className="relative">
       <input
@@ -696,8 +697,11 @@ function RowAmount({ value, onChange, label }: { value: number | null; onChange:
         placeholder={label}
         inputMode="decimal"
         className={cn(inputClass, "pr-6 tabular-nums")}
-        value={text}
-        onFocus={() => setFocused(true)}
+        value={shown}
+        onFocus={() => {
+          setText(value != null ? tiynToInput(value) : "");
+          setFocused(true);
+        }}
         onBlur={() => setFocused(false)}
         onChange={(e) => {
           setText(e.target.value);

@@ -81,10 +81,19 @@ describe("копилки", () => {
     expect(s.balance).toBe(18_000);
     expect(s.daysLeft).toBe(10);
     expect(s.required!.perDay).toBe(8_200);
-    // окно 90 дней: 06.08–03.11, августовское пополнение в него не входит
-    expect(s.pacePerDay).toBeCloseTo(100);
-    expect(s.forecastDate).toBe("2029-01-31"); // 82 000 / 100 = 820 дней
+    // темп по трём полным месяцам: 01.08–31.10 (92 дня), оба пополнения внутри
+    expect(s.pacePerDay).toBeCloseTo(18_000 / 92);
+    expect(s.forecastDate).toBe("2027-12-28"); // ⌈82 000 / 195,65⌉ = 420 дней
     expect(s.onTrack).toBe(false);
+  });
+  it("ежемесячный взнос даёт темп ≈ взносу, даже если окно режет по дате", () => {
+    const monthly = ["2026-08-05", "2026-09-05", "2026-10-05"].map((date) => ({ type: "goal_deposit" as const, amount: 65_000_00, date }));
+    const s = goalStats({ target: 1_000_000_00, createdAt: new Date(2026, 6, 1).getTime() }, monthly, "2026-11-03");
+    expect(s.pacePerDay * 30.44).toBeGreaterThan(64_000_00);
+  });
+  it("молодая копилка: темп с даты создания", () => {
+    const s = goalStats({ target: 100_000, createdAt: new Date(2026, 10, 1).getTime() }, [{ type: "goal_deposit", amount: 3_000, date: "2026-11-01" }], "2026-11-03");
+    expect(s.pacePerDay).toBeCloseTo(1_000);
   });
   it("без пополнений нет прогноза; достигнутая цель", () => {
     expect(goalStats(goal, [], "2026-11-03").forecastDate).toBeUndefined();
@@ -134,11 +143,13 @@ describe("продукты", () => {
   });
   it("история цен, инфляция и сравнение магазинов", () => {
     const it = (date: string, unitPrice: number, storeId: number) => ({ date, unitPrice, unit: "л" as const, quantity: 1, total: unitPrice, storeId });
-    const s = productStats([it("2026-05-01", 500, 1), it("2026-05-10", 520, 2), it("2026-11-01", 600, 1)], "л", "2026-11-03");
+    const s = productStats([it("2026-05-01", 50_000, 1), it("2026-05-10", 52_000, 2), it("2026-11-01", 60_000, 1)], "л", "2026-11-03");
     expect(s.changeSinceFirst).toBeCloseTo(20);
     // последняя покупка не позже 07.05 — это 01.05 по 500
     expect(s.changeSixMonths).toBeCloseTo(20);
-    expect(s.byStore[0]).toMatchObject({ storeId: 2, avg: 520 });
-    expect(s.min).toBe(500);
+    expect(s.byStore[0]).toMatchObject({ storeId: 2, avg: 52_000 });
+    expect(s.byStore[1]).toMatchObject({ storeId: 1, avg: 55_000 });
+    expect(s.avg).toBe(54_000); // 540 ₸, округлено до тенге
+    expect(s.min).toBe(50_000);
   });
 });

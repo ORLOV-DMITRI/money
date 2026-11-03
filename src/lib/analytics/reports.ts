@@ -65,8 +65,13 @@ export function summarize(txs: Transaction[], period: Period, today?: ISODate): 
   let count = 0;
   for (const tx of txs) {
     if (!inPeriod(tx.date, period)) continue;
-    if (tx.type === "income") (income += tx.amount), count++;
-    else if (tx.type === "expense") (expense += tx.amount), count++;
+    if (tx.type === "income") {
+      income += tx.amount;
+      count++;
+    } else if (tx.type === "expense") {
+      expense += tx.amount;
+      count++;
+    }
     else if (tx.type === "goal_deposit") saved += tx.amount;
     else if (tx.type === "goal_withdraw") saved -= tx.amount;
   }
